@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+
+{% block title %}Customer Dashboard - Restaurant RMS{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-4">
+        <div class="card mb-4">
+            <div class="card-body text-center">
+                <div class="mb-3">
+                    <i class="fas fa-user-circle fa-4x text-primary"></i>
+                </div>
+                <h3 class="card-title">{{ customer.c_name }}</h3>
+                <p class="text-muted">
+                    <i class="fas fa-phone me-2"></i>{{ customer.c_phone }}
+                </p>
+                <div class="d-flex justify-content-center align-items-center mb-3">
+                    <i class="fas fa-star text-warning me-2"></i>
+                    <h4 class="mb-0">{{ customer.loyal_pts }} Points</h4>
+                </div>
+                <a href="{{ url_for('menu') }}" class="btn btn-primary">
+                    <i class="fas fa-utensils me-2"></i>Order Food
+                </a>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">
+                    <i class="fas fa-info-circle me-2"></i>Loyalty Program
+                </h5>
+                <p class="card-text">
+                    Earn points with every order! Use your points to get exciting discounts.
+                </p>
+                <ul class="list-unstyled">
+                    <li><i class="fas fa-check text-success me-2"></i>1 point per ₹10 spent</li>
+                    <li><i class="fas fa-check text-success me-2"></i>100 points = ₹50 off</li>
+                    <li><i class="fas fa-check text-success me-2"></i>Points never expire</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-body">
+                <h4 class="card-title mb-4">
+                    <i class="fas fa-history me-2"></i>Order History
+                </h4>
+                
+                <div class="table-responsive">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Order ID</th>
+                                <th>Date</th>
+                                <th>Items</th>
+                                <th>Total</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% if orders %}
+                                {% for order in orders %}
+                                <tr>
+                                    <td>#{{ order.order_id }}</td>
+                                    <td>{{ order.time_stamp.strftime('%Y-%m-%d %H:%M') }}</td>
+                                    <td>
+                                        {% if order.order_items %}
+                                            {% for item in order.order_items %}
+                                            <span class="badge bg-primary me-1">
+                                                {{ item.item_name }} x{{ item.qty }}
+                                            </span>
+                                            {% endfor %}
+                                        {% else %}
+                                            <span class="text-muted">No items</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>₹{{ "%.2f"|format(order.total) }}</td>
+                                    <td>
+                                        <span class="badge bg-{{ order.status_color }}">
+                                            {{ order.status }}
+                                        </span>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            {% else %}
+                                <tr>
+                                    <td colspan="5" class="text-center">No orders yet</td>
+                                </tr>
+                            {% endif %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %} 

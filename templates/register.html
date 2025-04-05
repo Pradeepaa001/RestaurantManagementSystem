@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+
+{% block title %}Register - Restaurant RMS{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-body">
+                <h2 class="card-title text-center mb-4">
+                    <i class="fas fa-user-plus food-icon"></i>
+                    Register
+                </h2>
+                
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                    {% if messages %}
+                        {% for category, message in messages %}
+                            <div class="alert alert-{{ category }}">{{ message }}</div>
+                        {% endfor %}
+                    {% endif %}
+                {% endwith %}
+                
+                <form method="POST" action="{{ url_for('register') }}">
+                    <div class="mb-3">
+                        <label for="name" class="form-label">Full Name</label>
+                        <input type="text" class="form-control" id="name" name="name" required>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="phone" class="form-label">Phone Number</label>
+                        <input type="tel" class="form-control" id="phone" name="phone" required>
+                    </div>
+                    
+                    <div class="d-grid gap-2">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-user-plus me-2"></i>Register
+                        </button>
+                    </div>
+                </form>
+                
+                <div class="text-center mt-3">
+                    <p>Already have an account? <a href="{{ url_for('customer_login') }}">Login here</a></p>
+                </div>
+            </div>
+        </div>
+
+        <div class="card mt-4">
+            <div class="card-body">
+                <h5 class="card-title">
+                    <i class="fas fa-gift me-2"></i>
+                    Welcome Bonus!
+                </h5>
+                <p class="card-text">
+                    Get 100 loyalty points when you register! Use these points to get exciting discounts on your orders.
+                </p>
+                <ul class="list-unstyled">
+                    <li><i class="fas fa-check-circle text-success me-2"></i> Easy ordering process</li>
+                    <li><i class="fas fa-check-circle text-success me-2"></i> Track your orders in real-time</li>
+                    <li><i class="fas fa-check-circle text-success me-2"></i> Earn more points with every order</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %} 

@@ -1,0 +1,208 @@
+{% extends "base.html" %}
+
+{% block title %}Chef Dashboard - Restaurant RMS{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <h2 class="text-center">
+            <i class="fas fa-utensils food-icon"></i>
+            Kitchen Management
+        </h2>
+        <p class="text-center text-muted">Manage orders and menu items</p>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-8">
+        <div class="card mb-4">
+            <div class="card-body">
+                <h4 class="card-title mb-4">
+                    <i class="fas fa-clipboard-list me-2"></i>Pending Orders
+                </h4>
+                
+                <div class="table-responsive">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Order ID</th>
+                                <th>Customer</th>
+                                <th>Item</th>
+                                <th>Qty</th>
+                                <th>Prep Time</th>
+                                <th>Status</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for order in orders %}
+                            <tr>
+                                <td>#{{ order.order_id }}</td>
+                                <td>{{ order.c_name }}</td>
+                                <td>{{ order.item_name }}</td>
+                                <td>{{ order.qty }}</td>
+                                <td>{{ order.prep_time }} mins</td>
+                                <td>
+                                    <span class="badge bg-{{ 'warning' if order.order_status == 'placed' else 'info' }}">
+                                        {{ order.order_status }}
+                                    </span>
+                                </td>
+                                <td>
+                                    {% if order.order_status == 'placed' %}
+                                    <button class="btn btn-sm btn-primary start-cooking" 
+                                            data-order-id="{{ order.order_id }}"
+                                            data-item-id="{{ order.item_id }}">
+                                        <i class="fas fa-fire me-1"></i>Start Cooking
+                                    </button>
+                                    {% elif order.order_status == 'cooking' %}
+                                    <button class="btn btn-sm btn-success mark-cooked" 
+                                            data-order-id="{{ order.order_id }}"
+                                            data-item-id="{{ order.item_id }}">
+                                        <i class="fas fa-check me-1"></i>Mark Cooked
+                                    </button>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-body">
+                <h4 class="card-title mb-4">
+                    <i class="fas fa-list me-2"></i>Menu Management
+                </h4>
+                
+                <div class="list-group">
+                    {% for item in menu_items %}
+                    <div class="list-group-item">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <h6 class="mb-1">{{ item.item_name }}</h6>
+                                <small class="text-muted">Prep time: {{ item.prep_time }} mins</small>
+                            </div>
+                            <div class="form-check form-switch">
+                                <input class="form-check-input toggle-availability" 
+                                       type="checkbox" 
+                                       id="item{{ item.item_id }}"
+                                       data-item-id="{{ item.item_id }}"
+                                       {% if item.availability %}checked{% endif %}>
+                                <label class="form-check-label" for="item{{ item.item_id }}">
+                                    Available
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Start cooking
+    document.querySelectorAll('.start-cooking').forEach(button => {
+        button.addEventListener('click', function() {
+            const orderId = this.dataset.orderId;
+            const itemId = this.dataset.itemId;
+            
+            fetch('/update_order_status', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    order_id: orderId,
+                    item_id: itemId,
+                    status: 'cooking'
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    location.reload();
+                } else {
+                    alert('Error updating order status: ' + data.error);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Error updating order status. Please try again.');
+            });
+        });
+    });
+
+    // Mark as cooked
+    document.querySelectorAll('.mark-cooked').forEach(button => {
+        button.addEventListener('click', function() {
+            const orderId = this.dataset.orderId;
+            const itemId = this.dataset.itemId;
+            
+            fetch('/update_order_status', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    order_id: orderId,
+                    item_id: itemId,
+                    status: 'cooked'
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    location.reload();
+                } else {
+                    alert('Error updating order status: ' + data.error);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Error updating order status. Please try again.');
+            });
+        });
+    });
+
+    // Toggle item availability
+    document.querySelectorAll('.toggle-availability').forEach(toggle => {
+        toggle.addEventListener('change', function() {
+            const itemId = this.dataset.itemId;
+            const availability = this.checked;
+            
+            fetch('/update_menu_item', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    item_id: itemId,
+                    availability: availability
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (!data.success) {
+                    alert('Error updating item availability: ' + data.error);
+                    this.checked = !availability; // Revert the toggle
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Error updating item availability. Please try again.');
+                this.checked = !availability; // Revert the toggle
+            });
+        });
+    });
+});
+</script>
+{% endblock %} 

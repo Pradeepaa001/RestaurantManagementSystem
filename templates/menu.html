@@ -1,0 +1,197 @@
+{% extends "base.html" %}
+
+{% block title %}Menu - Restaurant RMS{% endblock %}
+
+{% block content %}
+<div class="row">
+    <!-- Cart Section -->
+    <div class="col-md-3">
+        <div class="card sticky-top" style="top: 20px;">
+            <div class="card-body">
+                <h4 class="card-title mb-4">
+                    <i class="fas fa-shopping-cart me-2"></i>Your Order
+                </h4>
+                <div id="cart-items" class="mb-4">
+                    <!-- Cart items will be dynamically added here -->
+                    <p class="text-muted text-center" id="empty-cart-message">Your cart is empty</p>
+                </div>
+                <div class="d-grid">
+                    <button id="place-order-btn" class="btn btn-primary" disabled>
+                        <i class="fas fa-check me-2"></i>Place Order
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Menu Section -->
+    <div class="col-md-9">
+        <div class="row mb-4">
+            <div class="col-12">
+                <h2 class="text-center">
+                    <i class="fas fa-utensils food-icon"></i>
+                    Our Menu
+                </h2>
+                <p class="text-center text-muted">Browse and order your favorite dishes</p>
+            </div>
+        </div>
+
+        {% for category_name, category_items in categories.items() %}
+        <div class="category-section mb-5">
+            <h3 class="mb-4">
+                <i class="fas fa-{% if category_name == 'Pizza' %}pizza-slice
+                             {% elif category_name == 'Burgers' %}hamburger
+                             {% elif category_name == 'Salads' %}leaf
+                             {% elif category_name == 'Tiffin' %}box
+                             {% elif category_name == 'Lunch' %}utensils
+                             {% elif category_name == 'Drinks' %}glass-martini
+                             {% else %}utensils{% endif %} me-2"></i>
+                {{ category_name }}
+            </h3>
+            <div class="row">
+                {% for item in category_items %}
+                <div class="col-md-4 mb-4">
+                    <div class="card h-100">
+                        {% if item.image_url %}
+                        <img src="{{ item.image_url }}" class="card-img-top" alt="{{ item.item_name }}">
+                        {% endif %}
+                        <div class="card-body">
+                            <h5 class="card-title">{{ item.item_name }}</h5>
+                            <p class="card-text">
+                                <small class="text-muted">
+                                    <i class="fas fa-clock me-1"></i>Prep time: {{ item.prep_time }} mins
+                                </small>
+                            </p>
+                            {% if item.allergen %}
+                            <p class="card-text">
+                                <small class="text-danger">
+                                    <i class="fas fa-exclamation-triangle me-1"></i>Contains: {{ item.allergen }}
+                                </small>
+                            </p>
+                            {% endif %}
+                            <div class="d-flex justify-content-between align-items-center">
+                                <span class="h5 mb-0">₹{{ "%.2f"|format(item.item_price) }}</span>
+                                <div class="input-group" style="width: 120px;">
+                                    <button class="btn btn-outline-primary decrease-qty" type="button">-</button>
+                                    <input type="number" class="form-control text-center item-qty" value="0" min="0" max="10" 
+                                           data-item-id="{{ item.item_id }}"
+                                           data-item-name="{{ item.item_name }}"
+                                           data-item-price="{{ item.item_price }}">
+                                    <button class="btn btn-outline-primary increase-qty" type="button">+</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const decreaseButtons = document.querySelectorAll('.decrease-qty');
+    const increaseButtons = document.querySelectorAll('.increase-qty');
+    const quantityInputs = document.querySelectorAll('.item-qty');
+    const placeOrderBtn = document.getElementById('place-order-btn');
+    const cartItems = document.getElementById('cart-items');
+    const emptyCartMessage = document.getElementById('empty-cart-message');
+    
+    function updateCart() {
+        let hasItems = false;
+        let cartHTML = '';
+        
+        quantityInputs.forEach(input => {
+            const quantity = parseInt(input.value);
+            if (quantity > 0) {
+                hasItems = true;
+                const itemName = input.dataset.itemName;
+                const itemPrice = parseFloat(input.dataset.itemPrice);
+                const total = itemPrice * quantity;
+                
+                cartHTML += `
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <div>
+                            <h6 class="mb-0">${itemName}</h6>
+                            <small class="text-muted">₹${itemPrice} x ${quantity}</small>
+                        </div>
+                        <div>
+                            <span class="fw-bold">₹${total.toFixed(2)}</span>
+                        </div>
+                    </div>
+                `;
+            }
+        });
+        
+        if (hasItems) {
+            emptyCartMessage.style.display = 'none';
+            cartItems.innerHTML = cartHTML;
+        } else {
+            emptyCartMessage.style.display = 'block';
+            cartItems.innerHTML = '';
+        }
+        
+        placeOrderBtn.disabled = !hasItems;
+    }
+    
+    decreaseButtons.forEach(button => {
+        button.addEventListener('click', function() {
+            const input = this.parentElement.querySelector('.item-qty');
+            const currentValue = parseInt(input.value);
+            if (currentValue > 0) {
+                input.value = currentValue - 1;
+                updateCart();
+            }
+        });
+    });
+    
+    increaseButtons.forEach(button => {
+        button.addEventListener('click', function() {
+            const input = this.parentElement.querySelector('.item-qty');
+            const currentValue = parseInt(input.value);
+            if (currentValue < 10) {
+                input.value = currentValue + 1;
+                updateCart();
+            }
+        });
+    });
+    
+    placeOrderBtn.addEventListener('click', function() {
+        const items = [];
+        quantityInputs.forEach(input => {
+            const quantity = parseInt(input.value);
+            if (quantity > 0) {
+                items.push({
+                    id: input.dataset.itemId,
+                    quantity: quantity
+                });
+            }
+        });
+        
+        fetch('/place_order', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ items: items })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                window.location.href = '/customer/dashboard';
+            } else {
+                alert('Error placing order: ' + data.error);
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('An error occurred while placing your order.');
+        });
+    });
+});
+</script>
+{% endblock %} 

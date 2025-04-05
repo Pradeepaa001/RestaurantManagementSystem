@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+
+{% block title %}Admin Dashboard - Restaurant RMS{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <h2 class="text-center">
+            <i class="fas fa-user-shield food-icon"></i>
+            Admin Dashboard
+        </h2>
+        <p class="text-center text-muted">Manage your restaurant operations</p>
+    </div>
+</div>
+
+<div class="row">
+    <!-- Employee Statistics -->
+    <div class="col-md-4 mb-4">
+        <div class="card h-100">
+            <div class="card-body">
+                <h3 class="card-title">
+                    <i class="fas fa-users me-2"></i>Employee Statistics
+                </h3>
+                <div class="list-group list-group-flush">
+                    {% for count in employee_counts %}
+                    <div class="list-group-item d-flex justify-content-between align-items-center">
+                        <span>
+                            <i class="fas fa-{% if count.role == 'chef' %}utensils{% elif count.role == 'waiter' %}concierge-bell{% else %}user-shield{% endif %} me-2"></i>
+                            {{ count.role|title }}
+                        </span>
+                        <span class="badge bg-primary rounded-pill">{{ count.count }}</span>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Recent Orders -->
+    <div class="col-md-8 mb-4">
+        <div class="card h-100">
+            <div class="card-body">
+                <h3 class="card-title">
+                    <i class="fas fa-clipboard-list me-2"></i>Recent Orders
+                </h3>
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Order ID</th>
+                                <th>Customer</th>
+                                <th>Time</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for order in recent_orders %}
+                            <tr>
+                                <td>#{{ order.order_id }}</td>
+                                <td>{{ order.c_name }}</td>
+                                <td>{{ order.time_stamp.strftime('%Y-%m-%d %H:%M') }}</td>
+                                <td>
+                                    <span class="badge bg-{{ 'success' if order.order_status == 'delivered' else 'warning' }}">
+                                        {{ order.order_status|title }}
+                                    </span>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <!-- Quick Actions -->
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body">
+                <h3 class="card-title">
+                    <i class="fas fa-bolt me-2"></i>Quick Actions
+                </h3>
+                <div class="row g-3">
+                    <div class="col-md-3">
+                        <a href="#" class="btn btn-primary w-100">
+                            <i class="fas fa-user-plus me-2"></i>Add Employee
+                        </a>
+                    </div>
+                    <div class="col-md-3">
+                        <a href="#" class="btn btn-success w-100">
+                            <i class="fas fa-utensils me-2"></i>Manage Menu
+                        </a>
+                    </div>
+                    <div class="col-md-3">
+                        <a href="#" class="btn btn-info w-100">
+                            <i class="fas fa-chart-bar me-2"></i>View Reports
+                        </a>
+                    </div>
+                    <div class="col-md-3">
+                        <a href="#" class="btn btn-warning w-100">
+                            <i class="fas fa-cog me-2"></i>Settings
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %} 
