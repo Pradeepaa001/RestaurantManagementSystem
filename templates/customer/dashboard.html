@@ -3,51 +3,88 @@
 {% block title %}Customer Dashboard - Restaurant RMS{% endblock %}
 
 {% block content %}
-<div class="row">
-    <div class="col-md-4">
-        <div class="card mb-4">
-            <div class="card-body text-center">
-                <div class="mb-3">
-                    <i class="fas fa-user-circle fa-4x text-primary"></i>
-                </div>
-                <h3 class="card-title">{{ customer.c_name }}</h3>
-                <p class="text-muted">
-                    <i class="fas fa-phone me-2"></i>{{ customer.c_phone }}
-                </p>
-                <div class="d-flex justify-content-center align-items-center mb-3">
-                    <i class="fas fa-star text-warning me-2"></i>
-                    <h4 class="mb-0">{{ customer.loyal_pts }} Points</h4>
-                </div>
-                <a href="{{ url_for('menu') }}" class="btn btn-primary">
-                    <i class="fas fa-utensils me-2"></i>Order Food
-                </a>
-            </div>
-        </div>
+<div class="row mb-4">
+    <div class="col-12">
+        <h2 class="text-center">
+            <i class="fas fa-user-circle food-icon"></i>
+            Welcome, {{ customer.c_name }}
+        </h2>
+        <p class="text-center text-muted">Your loyalty points: {{ customer.loyal_pts }}</p>
+    </div>
+</div>
 
-        <div class="card">
+<div class="row">
+    <div class="col-md-6 mb-4">
+        <div class="card h-100">
+            <div class="card-header">
+                <h3 class="card-title mb-0">
+                    <i class="fas fa-utensils me-2"></i>Current Order
+                </h3>
+            </div>
             <div class="card-body">
-                <h5 class="card-title">
-                    <i class="fas fa-info-circle me-2"></i>Loyalty Program
-                </h5>
-                <p class="card-text">
-                    Earn points with every order! Use your points to get exciting discounts.
-                </p>
-                <ul class="list-unstyled">
-                    <li><i class="fas fa-check text-success me-2"></i>1 point per ₹10 spent</li>
-                    <li><i class="fas fa-check text-success me-2"></i>100 points = ₹50 off</li>
-                    <li><i class="fas fa-check text-success me-2"></i>Points never expire</li>
-                </ul>
+                {% if current_order %}
+                <div class="table-responsive">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Item</th>
+                                <th>Quantity</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% if current_order.order_items %}
+                            {% for item in current_order.order_items %}
+                            <tr>
+                                <td>{{ item.item_name }}</td>
+                                <td>{{ item.qty }}</td>
+                                <td>
+                                    <span class="badge bg-{{ item.status_color }}">
+                                        {{ item.order_status }}
+                                    </span>
+                                </td>
+                                <td>
+                                    <button class="btn btn-sm btn-danger remove-item" 
+                                            data-order-id="{{ current_order.order_id }}"
+                                            data-item-id="{{ item.item_id }}">
+                                        Remove
+                                    </button>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                            {% else %}
+                            <tr>
+                                <td colspan="4" class="text-center">No items in this order</td>
+                            </tr>
+                            {% endif %}
+                        </tbody>
+                    </table>
+                </div>
+                <div class="text-end mt-3">
+                    <a href="{{ url_for('menu') }}" class="btn btn-primary">
+                        <i class="fas fa-plus me-2"></i>Add More Items
+                    </a>
+                </div>
+                {% else %}
+                <p class="text-muted">No active order. Visit the menu to place an order.</p>
+                <a href="{{ url_for('menu') }}" class="btn btn-primary">
+                    <i class="fas fa-utensils me-2"></i>View Menu
+                </a>
+                {% endif %}
             </div>
         </div>
     </div>
 
-    <div class="col-md-8">
-        <div class="card">
-            <div class="card-body">
-                <h4 class="card-title mb-4">
+    <div class="col-md-6 mb-4">
+        <div class="card h-100">
+            <div class="card-header">
+                <h3 class="card-title mb-0">
                     <i class="fas fa-history me-2"></i>Order History
-                </h4>
-                
+                </h3>
+            </div>
+            <div class="card-body">
+                {% if orders %}
                 <div class="table-responsive">
                     <table class="table">
                         <thead>
@@ -60,40 +97,74 @@
                             </tr>
                         </thead>
                         <tbody>
-                            {% if orders %}
-                                {% for order in orders %}
-                                <tr>
-                                    <td>#{{ order.order_id }}</td>
-                                    <td>{{ order.time_stamp.strftime('%Y-%m-%d %H:%M') }}</td>
-                                    <td>
-                                        {% if order.order_items %}
-                                            {% for item in order.order_items %}
-                                            <span class="badge bg-primary me-1">
-                                                {{ item.item_name }} x{{ item.qty }}
-                                            </span>
-                                            {% endfor %}
-                                        {% else %}
-                                            <span class="text-muted">No items</span>
-                                        {% endif %}
-                                    </td>
-                                    <td>₹{{ "%.2f"|format(order.total) }}</td>
-                                    <td>
-                                        <span class="badge bg-{{ order.status_color }}">
-                                            {{ order.status }}
-                                        </span>
-                                    </td>
-                                </tr>
-                                {% endfor %}
-                            {% else %}
-                                <tr>
-                                    <td colspan="5" class="text-center">No orders yet</td>
-                                </tr>
-                            {% endif %}
+                            {% for order in orders %}
+                            <tr>
+                                <td>#{{ order.order_id }}</td>
+                                <td>{{ order.time_stamp.strftime('%Y-%m-%d %H:%M') }}</td>
+                                <td>
+                                    {% if order.order_items %}
+                                    {% for item in order.order_items %}
+                                    {{ item.item_name }} ({{ item.qty }})<br>
+                                    {% endfor %}
+                                    {% else %}
+                                    No items
+                                    {% endif %}
+                                </td>
+                                <td>₹{{ "%.2f"|format(order.total) }}</td>
+                                <td>
+                                    <span class="badge bg-{{ order.status_color }}">
+                                        {{ order.status }}
+                                    </span>
+                                </td>
+                            </tr>
+                            {% endfor %}
                         </tbody>
                     </table>
                 </div>
+                {% else %}
+                <p class="text-muted">No order history yet.</p>
+                {% endif %}
             </div>
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Remove item from order
+    document.querySelectorAll('.remove-item').forEach(button => {
+        button.addEventListener('click', function() {
+            const orderId = this.dataset.orderId;
+            const itemId = this.dataset.itemId;
+            
+            if (confirm('Are you sure you want to remove this item from your order?')) {
+                fetch('/remove_order_item', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        order_id: orderId,
+                        item_id: itemId
+                    })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        location.reload();
+                    } else {
+                        alert('Error removing item: ' + data.error);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('Error removing item. Please try again.');
+                });
+            }
+        });
+    });
+});
+</script>
 {% endblock %} 

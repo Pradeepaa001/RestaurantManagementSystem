@@ -36,9 +36,9 @@ CREATE TABLE IF NOT EXISTS waiter (
     FOREIGN KEY (emp_id) REFERENCES employee(emp_id)
 );
 
--- Tables table
-CREATE TABLE IF NOT EXISTS tables (
-    table_id INT PRIMARY KEY AUTO_INCREMENT,
+-- Spots table (renamed from tables)
+CREATE TABLE IF NOT EXISTS spots (
+    spot_id INT PRIMARY KEY AUTO_INCREMENT,
     availability BOOLEAN DEFAULT TRUE,
     QR_code VARCHAR(255) UNIQUE NOT NULL,
     cust_id INT,
@@ -60,8 +60,8 @@ CREATE TABLE IF NOT EXISTS menu (
     image_url VARCHAR(255)
 );
 
--- Order table
-CREATE TABLE IF NOT EXISTS `order` (
+-- Orders table (renamed from order)
+CREATE TABLE IF NOT EXISTS orders (
     order_id INT PRIMARY KEY AUTO_INCREMENT,
     paid_status BOOLEAN DEFAULT FALSE,
     time_stamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -77,7 +77,7 @@ CREATE TABLE IF NOT EXISTS order_details (
     chef_id INT,
     qty INT NOT NULL,
     PRIMARY KEY (order_id, item_id),
-    FOREIGN KEY (order_id) REFERENCES `order`(order_id),
+    FOREIGN KEY (order_id) REFERENCES orders(order_id),
     FOREIGN KEY (item_id) REFERENCES menu(item_id),
     FOREIGN KEY (chef_id) REFERENCES chef(chef_id)
 );
@@ -92,7 +92,7 @@ CREATE TABLE IF NOT EXISTS bill (
     pay_mode ENUM('cash', 'online') NOT NULL,
     order_id INT,
     waiter_id INT,
-    FOREIGN KEY (order_id) REFERENCES `order`(order_id),
+    FOREIGN KEY (order_id) REFERENCES orders(order_id),
     FOREIGN KEY (waiter_id) REFERENCES waiter(waiter_id)
 );
 
@@ -112,44 +112,25 @@ INSERT INTO chef (emp_id, specialization) VALUES
 INSERT INTO waiter (emp_id) VALUES
 (3);
 
-INSERT INTO tables (QR_code, waiter_id) VALUES
-('table1_qr', 1),
-('table2_qr', 1);
+INSERT INTO spots (QR_code, waiter_id) VALUES
+('spot1_qr', 1),
+('spot2_qr', 1);
 
 -- Insert sample menu items
 INSERT INTO menu (item_name, allergen, rating, category, item_price, prep_time, image_url) VALUES
--- Pizza Category
-('Margherita Pizza', 'Dairy, Gluten', 4.5, 'Pizza', 299.00, 15, '/static/images/pizza/margherita.jpg'),
-('Pepperoni Pizza', 'Dairy, Gluten, Pork', 4.8, 'Pizza', 399.00, 18, '/static/images/pizza/pepperoni.jpg'),
-('Vegetarian Supreme', 'Dairy, Gluten', 4.6, 'Pizza', 349.00, 20, '/static/images/pizza/veg-supreme.jpg'),
-('BBQ Chicken Pizza', 'Dairy, Gluten, Egg', 4.7, 'Pizza', 449.00, 20, '/static/images/pizza/bbq-chicken.jpg'),
-
--- Burgers Category
-('Classic Burger', 'Gluten, Egg', 4.3, 'Burgers', 199.00, 10, '/static/images/burgers/classic.jpg'),
-('Cheese Burger', 'Dairy, Gluten, Egg', 4.4, 'Burgers', 249.00, 12, '/static/images/burgers/cheese.jpg'),
-('Veg Burger', 'Gluten, Egg', 4.2, 'Burgers', 179.00, 8, '/static/images/burgers/veg.jpg'),
-('Chicken Burger', 'Gluten, Egg', 4.5, 'Burgers', 299.00, 15, '/static/images/burgers/chicken.jpg'),
-
--- Salads Category
-('Caesar Salad', 'Egg, Dairy', 4.0, 'Salads', 149.00, 5, '/static/images/salads/caesar.jpg'),
-('Greek Salad', 'Dairy', 4.1, 'Salads', 169.00, 5, '/static/images/salads/greek.jpg'),
-('Chicken Salad', 'Egg', 4.3, 'Salads', 199.00, 8, '/static/images/salads/chicken.jpg'),
-('Quinoa Salad', NULL, 4.2, 'Salads', 179.00, 7, '/static/images/salads/quinoa.jpg'),
-
+('Margherita Pizza', 'Dairy, Gluten', 4.5, 'Pizza', 299.00, 15, '/static/images/pizza.jpeg'),
+('Chicken Burger', 'Egg, Gluten', 4.2, 'Burgers', 199.00, 10, '/static/images/burger.jpeg'),
+('Caesar Salad', 'Egg, Dairy', 4.0, 'Salads', 149.00, 5, '/static/images/salad.jpeg'); 
+INSERT INTO menu (item_name, allergen, rating, category, item_price, prep_time, image_url) VALUES
+('Dosa', 'Ghee, oil', 4.5, 'Tiffin', 99.00, 10, '/static/images/dosa.jpg');
 -- Tiffin Category
-('Veg Thali', NULL, 4.4, 'Tiffin', 199.00, 15, '/static/images/tiffin/veg-thali.jpg'),
-('Non-Veg Thali', 'Egg', 4.6, 'Tiffin', 299.00, 20, '/static/images/tiffin/non-veg-thali.jpg'),
-('South Indian Thali', NULL, 4.5, 'Tiffin', 249.00, 18, '/static/images/tiffin/south-indian.jpg'),
-('Chinese Thali', 'Egg', 4.3, 'Tiffin', 279.00, 20, '/static/images/tiffin/chinese.jpg'),
+('Idly', NULL, 4.9, 'Tiffin', 69.00, 15, '/static/images/idly.jpeg'),
+('Chapthi', 'Maida', 4.6, 'Tiffin', 49.00, 6, '/static/images/chapathi.jpeg'),
 
 -- Lunch Category
-('Butter Chicken', 'Dairy', 4.7, 'Lunch', 349.00, 25, '/static/images/lunch/butter-chicken.jpg'),
-('Paneer Butter Masala', 'Dairy', 4.6, 'Lunch', 299.00, 20, '/static/images/lunch/paneer.jpg'),
-('Biryani', 'Egg', 4.8, 'Lunch', 279.00, 25, '/static/images/lunch/biryani.jpg'),
-('Dal Makhani', 'Dairy', 4.5, 'Lunch', 199.00, 20, '/static/images/lunch/dal.jpg'),
+('Veg Thali', 'Dairy', 4.7, 'Lunch', 349.00, 25, '/static/images/veg-thali.jpeg'),
+('Biryani', 'Cashew, Spices', 4.8, 'Lunch', 279.00, 25, '/static/images/biryani.jpeg'),
 
 -- Drinks Category
-('Fresh Lime Soda', NULL, 4.2, 'Drinks', 49.00, 2, '/static/images/drinks/lime-soda.jpg'),
-('Masala Chai', 'Dairy', 4.5, 'Drinks', 39.00, 3, '/static/images/drinks/masala-chai.jpg'),
-('Fresh Juice', NULL, 4.4, 'Drinks', 79.00, 5, '/static/images/drinks/fresh-juice.jpg'),
-('Cold Coffee', 'Dairy', 4.3, 'Drinks', 89.00, 4, '/static/images/drinks/cold-coffee.jpg'); 
+('Fresh Lime Soda', NULL, 4.2, 'Drinks', 49.00, 2, '/static/images/soda.jpeg'),
+('Filter Coffee', 'Dairy', 4.5, 'Drinks', 39.00, 3, '/static/images/coffee.jpeg');

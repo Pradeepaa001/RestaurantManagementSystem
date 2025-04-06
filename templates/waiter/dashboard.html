@@ -7,87 +7,94 @@
     <div class="col-12">
         <h2 class="text-center">
             <i class="fas fa-concierge-bell food-icon"></i>
-            Table Management
+            Spot Management
         </h2>
-        <p class="text-center text-muted">Manage your assigned tables and orders</p>
+        <p class="text-center text-muted">Manage your assigned spots and orders</p>
     </div>
 </div>
 
 <div class="row">
-    {% for table in tables_data %}
+    {% for spot in spots_data %}
     <div class="col-md-4 mb-4">
         <div class="card h-100">
             <div class="card-body">
                 <div class="d-flex justify-content-between align-items-center mb-3">
                     <h3 class="card-title mb-0">
-                        <i class="fas fa-chair me-2"></i>Table {{ table.table_id }}
+                        <i class="fas fa-chair me-2"></i>Spot {{ spot.spot_id }}
                     </h3>
-                    <span class="badge bg-{{ 'success' if table.availability else 'danger' }}">
-                        {{ 'Available' if table.availability else 'Occupied' }}
+                    <span class="badge bg-{{ 'success' if spot.availability else 'danger' }}">
+                        {{ 'Available' if spot.availability else 'Occupied' }}
                     </span>
                 </div>
 
-                {% if table.cust_id %}
+                {% if spot.customer_name %}
                 <div class="mb-3">
                     <p class="mb-1">
-                        <i class="fas fa-user me-2"></i>Customer: {{ table.c_name }}
-                    </p>
-                    <p class="mb-1">
-                        <i class="fas fa-phone me-2"></i>Phone: {{ table.c_phone }}
+                        <i class="fas fa-user me-2"></i>Customer: {{ spot.customer_name }}
                     </p>
                 </div>
 
-                {% if table.order_id %}
-                <div class="mb-3">
-                    <h5 class="mb-2">Current Order</h5>
-                    <div class="table-responsive">
-                        <table class="table table-sm">
-                            <thead>
-                                <tr>
-                                    <th>Item</th>
-                                    <th>Qty</th>
-                                    <th>Status</th>
-                                    <th>Action</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for item in table.order_items %}
-                                <tr>
-                                    <td>{{ item.item_name }}</td>
-                                    <td>{{ item.qty }}</td>
-                                    <td>
-                                        <span class="badge bg-{{ item.status_color }}">
-                                            {{ item.order_status }}
-                                        </span>
-                                    </td>
-                                    <td>
-                                        {% if item.order_status == 'cooked' %}
-                                        <button class="btn btn-sm btn-success mark-delivered" 
-                                                data-order-id="{{ table.order_id }}"
-                                                data-item-id="{{ item.item_id }}">
-                                            <i class="fas fa-check"></i>
-                                        </button>
-                                        {% endif %}
-                                    </td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
+                {% if spot.order_id %}
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="mb-0">Order #{{ spot.order_id }}</h5>
                     </div>
-                </div>
-
-                <div class="d-grid gap-2">
-                    <button class="btn btn-primary generate-bill" 
-                            data-order-id="{{ table.order_id }}"
-                            {% if not all_items_delivered %}disabled{% endif %}>
-                        <i class="fas fa-file-invoice-dollar me-2"></i>Generate Bill
-                    </button>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table">
+                                <thead>
+                                    <tr>
+                                        <th>Item</th>
+                                        <th>Quantity</th>
+                                        <th>Status</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for item in spot.items %}
+                                    <tr>
+                                        <td>{{ item.item_name }}</td>
+                                        <td>{{ item.qty }}</td>
+                                        <td>
+                                            <span class="badge bg-{{ item.status_color }}">
+                                                {{ item.order_status }}
+                                            </span>
+                                        </td>
+                                        <td>
+                                            {% if item.order_status == 'cooked' %}
+                                            <button class="btn btn-sm btn-success mark-delivered" 
+                                                    data-order-id="{{ spot.order_id }}"
+                                                    data-item-id="{{ item.item_id }}">
+                                                Mark Delivered
+                                            </button>
+                                            {% endif %}
+                                            {% if item.order_status == 'delivered' %}
+                                            <button class="btn btn-sm btn-primary generate-bill" 
+                                                    data-order-id="{{ spot.order_id }}"
+                                                    data-item-id="{{ item.item_id }}">
+                                                Generate Bill
+                                            </button>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="text-end mt-3">
+                            <button class="btn btn-primary close-order" 
+                                    data-order-id="{{ spot.order_id }}"
+                                    {% if not spot.all_billed %}disabled{% endif %}>
+                                Close Order
+                            </button>
+                        </div>
+                    </div>
                 </div>
                 {% else %}
                 <p class="text-muted">No active order</p>
                 {% endif %}
                 {% else %}
-                <p class="text-muted">Table is empty</p>
+                <p class="text-muted">Spot is empty</p>
                 {% endif %}
             </div>
         </div>
@@ -199,6 +206,36 @@ document.addEventListener('DOMContentLoaded', function() {
         alert('Payment confirmed!');
         $('#billModal').modal('hide');
         location.reload();
+    });
+
+    // Close order
+    document.querySelectorAll('.close-order').forEach(button => {
+        button.addEventListener('click', function() {
+            const orderId = this.dataset.orderId;
+            
+            fetch('/close_order', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    order_id: orderId
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('Order closed successfully');
+                    location.reload();
+                } else {
+                    alert(data.error || 'Failed to close order');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('An error occurred while closing the order');
+            });
+        });
     });
 });
 </script>

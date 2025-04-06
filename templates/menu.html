@@ -7,10 +7,12 @@
     <!-- Cart Section -->
     <div class="col-md-3">
         <div class="card sticky-top" style="top: 20px;">
-            <div class="card-body">
-                <h4 class="card-title mb-4">
+            <div class="card-header">
+                <h4 class="card-title mb-0">
                     <i class="fas fa-shopping-cart me-2"></i>Your Order
                 </h4>
+            </div>
+            <div class="card-body">
                 <div id="cart-items" class="mb-4">
                     <!-- Cart items will be dynamically added here -->
                     <p class="text-muted text-center" id="empty-cart-message">Your cart is empty</p>
@@ -37,11 +39,12 @@
         </div>
 
         {% for category_name, category_items in categories.items() %}
+        {% if category_items %}
         <div class="category-section mb-5">
             <h3 class="mb-4">
                 <i class="fas fa-{% if category_name == 'Pizza' %}pizza-slice
-                             {% elif category_name == 'Burgers' %}hamburger
-                             {% elif category_name == 'Salads' %}leaf
+                             {% elif category_name == 'Burger' %}hamburger
+                             {% elif category_name == 'Salad' %}leaf
                              {% elif category_name == 'Tiffin' %}box
                              {% elif category_name == 'Lunch' %}utensils
                              {% elif category_name == 'Drinks' %}glass-martini
@@ -86,8 +89,18 @@
                 {% endfor %}
             </div>
         </div>
+        {% endif %}
         {% endfor %}
     </div>
+</div>
+
+<!-- Hidden data for current order items -->
+<div id="current-order-data" style="display: none;">
+    {% if current_order_items %}
+    {% for item_id, qty in current_order_items.items() %}
+    <div data-item-id="{{ item_id }}" data-qty="{{ qty }}"></div>
+    {% endfor %}
+    {% endif %}
 </div>
 {% endblock %}
 
@@ -101,9 +114,25 @@ document.addEventListener('DOMContentLoaded', function() {
     const cartItems = document.getElementById('cart-items');
     const emptyCartMessage = document.getElementById('empty-cart-message');
     
+    // Pre-populate cart with existing order items
+    const currentOrderData = document.getElementById('current-order-data');
+    if (currentOrderData) {
+        const orderItems = currentOrderData.querySelectorAll('div[data-item-id]');
+        orderItems.forEach(item => {
+            const itemId = item.getAttribute('data-item-id');
+            const qty = parseInt(item.getAttribute('data-qty'));
+            const input = document.querySelector(`.item-qty[data-item-id="${itemId}"]`);
+            if (input) {
+                input.value = qty;
+            }
+        });
+        updateCart();
+    }
+    
     function updateCart() {
         let hasItems = false;
         let cartHTML = '';
+        let totalAmount = 0;
         
         quantityInputs.forEach(input => {
             const quantity = parseInt(input.value);
@@ -112,6 +141,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 const itemName = input.dataset.itemName;
                 const itemPrice = parseFloat(input.dataset.itemPrice);
                 const total = itemPrice * quantity;
+                totalAmount += total;
                 
                 cartHTML += `
                     <div class="d-flex justify-content-between align-items-center mb-2">
@@ -129,6 +159,13 @@ document.addEventListener('DOMContentLoaded', function() {
         
         if (hasItems) {
             emptyCartMessage.style.display = 'none';
+            cartHTML += `
+                <hr>
+                <div class="d-flex justify-content-between align-items-center">
+                    <h6 class="mb-0">Total</h6>
+                    <span class="fw-bold">₹${totalAmount.toFixed(2)}</span>
+                </div>
+            `;
             cartItems.innerHTML = cartHTML;
         } else {
             emptyCartMessage.style.display = 'block';
@@ -172,7 +209,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
         
-        fetch('/place_order', {
+        fetch('/place_order_final', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
@@ -182,7 +219,10 @@ document.addEventListener('DOMContentLoaded', function() {
         .then(response => response.json())
         .then(data => {
             if (data.success) {
-                window.location.href = '/customer/dashboard';
+                // Add a small delay before redirecting to ensure the order is saved
+                setTimeout(function() {
+                    window.location.href = '/customer/dashboard';
+                }, 500);
             } else {
                 alert('Error placing order: ' + data.error);
             }
