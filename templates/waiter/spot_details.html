@@ -1,0 +1,226 @@
+{% extends "base.html" %}
+
+{% block title %}Spot {{ spot.table_id }} Details - Restaurant RMS{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <h2>
+                    <i class="fas fa-chair me-2"></i>
+                    Spot {{ spot.table_id }} Details
+                </h2>
+                <a href="{{ url_for('waiter_dashboard') }}" class="btn btn-outline-secondary">
+                    <i class="fas fa-arrow-left me-2"></i>Back to Dashboard
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Spot Information -->
+        <div class="col-md-4 mb-4">
+            <div class="card shadow-sm h-100">
+                <div class="card-header {% if spot.availability %}bg-success{% else %}bg-danger{% endif %} text-white">
+                    <h4 class="mb-0">
+                        <i class="fas fa-info-circle me-2"></i>Spot Information
+                    </h4>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <h5 class="text-muted">Seats</h5>
+                        <p class="h5">4</p>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <h5 class="text-muted">Status</h5>
+                        {% if spot.availability %}
+                        <span class="badge bg-success">Available</span>
+                        {% else %}
+                        <span class="badge bg-danger">Occupied</span>
+                        {% endif %}
+                    </div>
+                    
+                    {% if not spot.availability and spot.cust_id %}
+                    <div class="mb-3">
+                        <h5 class="text-muted">Customer</h5>
+                        <p class="h5">{{ spot.c_name }}</p>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <h5 class="text-muted">Phone</h5>
+                        <p>{{ spot.c_phone }}</p>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <h5 class="text-muted">Loyalty Points</h5>
+                        <p>{{ spot.loyal_pts }}</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        
+        <!-- Order Information -->
+        <div class="col-md-8">
+            {% if not spot.availability and spot.cust_id %}
+                {% if order %}
+                <div class="card shadow-sm mb-4">
+                    <div class="card-header bg-primary text-white">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <h4 class="mb-0">
+                                <i class="fas fa-utensils me-2"></i>Current Order
+                            </h4>
+                            <span class="badge bg-light text-dark">
+                                Order #{{ order.order_id }}
+                            </span>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>Item</th>
+                                        <th>Category</th>
+                                        <th>Quantity</th>
+                                        <th>Price</th>
+                                        <th>Status</th>
+                                        <th>Chef</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for item in order.items %}
+                                    <tr>
+                                        <td>{{ item.item_name }}</td>
+                                        <td>{{ item.category }}</td>
+                                        <td>{{ item.qty }}</td>
+                                        <td>₹{{ "%.2f"|format(item.item_price) }}</td>
+                                        <td>
+                                            <span class="badge bg-{{ item.status_color }}">
+                                                {{ item.order_status|title }}
+                                            </span>
+                                        </td>
+                                        <td>
+                                            {% if item.chef_id %}
+                                            <span class="badge bg-info">{{ item.chef_name or 'Chef #' + item.chef_id|string }}</span>
+                                            {% else %}
+                                            <span class="badge bg-secondary">Not assigned</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            {% if item.order_status == 'cooked' %}
+                                            <button class="btn btn-sm btn-success mark-delivered" 
+                                                    data-order-id="{{ order.order_id }}"
+                                                    data-item-id="{{ item.item_id }}">
+                                                <i class="fas fa-check me-1"></i>Mark Delivered
+                                            </button>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        
+                        <div class="d-grid gap-2 mt-4">
+                            <button id="generate-bill-btn" class="btn btn-success" 
+                                    {% if not order.all_billed %}disabled{% endif %}
+                                    data-order-id="{{ order.order_id }}">
+                                <i class="fas fa-file-invoice-dollar me-2"></i>Generate Bill
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                {% else %}
+                <div class="card shadow-sm mb-4">
+                    <div class="card-body text-center py-5">
+                        <i class="fas fa-utensils fa-4x text-muted mb-3"></i>
+                        <h3>No Active Order</h3>
+                        <p class="text-muted">The customer at this spot has not placed an order yet.</p>
+                    </div>
+                </div>
+                {% endif %}
+            {% else %}
+                <div class="card shadow-sm mb-4">
+                    <div class="card-body text-center py-5">
+                        <i class="fas fa-chair fa-4x text-muted mb-3"></i>
+                        <h3>Spot is Available</h3>
+                        <p class="text-muted">This spot is currently available and waiting for a customer.</p>
+                    </div>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Mark item as delivered
+    document.querySelectorAll('.mark-delivered').forEach(button => {
+        button.addEventListener('click', function() {
+            const orderId = this.dataset.orderId;
+            const itemId = this.dataset.itemId;
+            
+            fetch('/update_order_status', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    order_id: orderId,
+                    item_id: itemId,
+                    status: 'delivered'
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    location.reload();
+                } else {
+                    alert('Error updating order status: ' + data.error);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('An error occurred while updating the order status.');
+            });
+        });
+    });
+    
+    // Generate bill
+    const generateBillBtn = document.getElementById('generate-bill-btn');
+    if (generateBillBtn) {
+        generateBillBtn.addEventListener('click', function() {
+            const orderId = this.dataset.orderId;
+            
+            fetch('/generate_bill', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ order_id: orderId })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('Bill generated successfully!');
+                    window.location.reload();
+                } else {
+                    alert('Error generating bill: ' + data.error);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('An error occurred while generating the bill.');
+            });
+        });
+    }
+});
+</script>
+{% endblock %} 

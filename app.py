@@ -41,27 +41,71 @@ def customer_login():
     if request.method == 'POST':
         phone = request.form.get('phone')
         
-        conn = get_db_connection()
-        if not conn:
-            return render_template('customer_login.html', error="Database connection error")
-            
+        conn = None
+        cursor = None
         try:
+            conn = get_db_connection()
             cursor = conn.cursor(dictionary=True)
-            cursor.execute('SELECT * FROM customer WHERE c_phone = %s', (phone,))
-            user = cursor.fetchone()
             
-            if user:
-                session['user_id'] = user['cust_id']
-                session['role'] = 'customer'
-                return redirect(url_for('customer_dashboard'))
+            # Check customer credentials (only phone number)
+            cursor.execute('SELECT * FROM customer WHERE c_phone = %s', (phone,))
+            customer = cursor.fetchone()
+            
+            if customer:
+                # Check if customer already has an assigned spot
+                cursor.execute('SELECT * FROM spots WHERE cust_id = %s', (customer['cust_id'],))
+                existing_spot = cursor.fetchone()
+                
+                if existing_spot:
+                    # Customer already has a spot, log them in
+                    session['user_id'] = customer['cust_id']
+                    session['role'] = 'customer'
+                    return redirect(url_for('menu'))
+                
+                # Find an available spot
+                cursor.execute("""
+                    SELECT s.* FROM spots s
+                    WHERE s.availability = 1
+                    AND s.waiter_id IN (
+                        SELECT waiter_id FROM waiter
+                        WHERE (SELECT COUNT(*) FROM spots s2 
+                              WHERE s2.waiter_id = waiter.waiter_id) < 3
+                    )
+                    LIMIT 1
+                """)
+                available_spot = cursor.fetchone()
+                
+                if available_spot:
+                    # Assign spot to customer
+                    cursor.execute("""
+                        UPDATE spots 
+                        SET availability = 0, cust_id = %s
+                        WHERE table_id = %s
+                    """, (customer['cust_id'], available_spot['table_id']))
+                    conn.commit()
+                    
+                    # Log customer in
+                    session['user_id'] = customer['cust_id']
+                    session['role'] = 'customer'
+                    return redirect(url_for('menu'))
+                else:
+                    # No spots available, show waiting room
+                    return render_template('customer_waiting.html', 
+                                        customer_name=customer['c_name'])
             
             flash('Phone number not found. Please register first.', 'danger')
-        except Error as e:
-            flash(f'Database error: {str(e)}', 'danger')
+            return redirect(url_for('customer_login'))
+        
+        except Exception as e:
+            flash(f'An error occurred: {str(e)}', 'danger')
+            return redirect(url_for('customer_login'))
+        
         finally:
-            cursor.close()
-            conn.close()
-            
+            if cursor:
+                cursor.close()
+            if conn:
+                conn.close()
+    
     return render_template('customer_login.html')
 
 @app.route('/employee/login', methods=['GET', 'POST'])
@@ -427,67 +471,74 @@ def remove_order_item():
 
 @app.route('/waiter/dashboard')
 def waiter_dashboard():
-    if 'user_id' not in session or session['role'] != 'waiter':
-        return redirect(url_for('employee_login'))
+    if 'user_id' not in session or session.get('role') != 'waiter':
+        flash('Please login as a waiter to access this page.', 'danger')
+        return redirect(url_for('login'))
     
-    conn = get_db_connection()
-    cursor = conn.cursor(dictionary=True)
-    
+    conn = None
+    cursor = None
     try:
-        # Get waiter's spots and their orders
-        cursor.execute('''
-            SELECT s.*, c.c_name, o.order_id, o.paid_status,
-                   GROUP_CONCAT(CONCAT(m.item_name, ':', od.qty, ':', od.order_status) SEPARATOR '|') as items,
-                   COUNT(*) as total_items,
-                   SUM(CASE WHEN od.order_status = 'billed' THEN 1 ELSE 0 END) as billed_items
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+        
+        # First, get the waiter_id
+        cursor.execute("SELECT waiter_id FROM waiter WHERE emp_id = %s", (session['user_id'],))
+        waiter = cursor.fetchone()
+        
+        if not waiter:
+            flash('Waiter not found.', 'danger')
+            return redirect(url_for('login'))
+        
+        # Get waiter's spots (limited to 3)
+        cursor.execute("""
+            SELECT s.table_id, s.availability, s.cust_id, c.c_name, c.c_phone, c.loyal_pts,
+                   o.order_id, o.paid_status,
+                   (SELECT COUNT(*) FROM order_details od WHERE od.order_id = o.order_id) as total_items,
+                   (SELECT COUNT(*) FROM order_details od WHERE od.order_id = o.order_id AND od.order_status = 'billed') as billed_items
             FROM spots s
             LEFT JOIN customer c ON s.cust_id = c.cust_id
-            LEFT JOIN orders o ON c.cust_id = o.cust_id AND o.paid_status = FALSE
-            LEFT JOIN order_details od ON o.order_id = od.order_id
-            LEFT JOIN menu m ON od.item_id = m.item_id
-            WHERE s.waiter_id = (SELECT waiter_id FROM waiter WHERE emp_id = %s)
-            GROUP BY s.table_id, c.c_name, o.order_id, o.paid_status
-        ''', (session['user_id'],))
+            LEFT JOIN (
+                SELECT * FROM orders 
+                WHERE paid_status = 0 
+                AND order_id IN (
+                    SELECT MAX(order_id) 
+                    FROM orders 
+                    WHERE paid_status = 0 
+                    GROUP BY cust_id
+                )
+            ) o ON s.cust_id = o.cust_id
+            WHERE s.waiter_id = %s
+            ORDER BY s.table_id
+            LIMIT 3
+        """, (waiter['waiter_id'],))
         
-        spots_data = []
-        for row in cursor.fetchall():
-            spot_data = {
-                'spot_id': row['table_id'],
-                'customer_name': row['c_name'],
-                'order_id': row['order_id'],
-                'items': [],
-                'all_billed': False
-            }
-            
-            if row['items']:
-                for item in row['items'].split('|'):
-                    name, qty, status = item.split(':')
-                    spot_data['items'].append({
-                        'item_name': name,
-                        'qty': int(qty),
-                        'order_status': status,
-                        'status_color': {
-                            'placed': 'warning',
-                            'cooking': 'info',
-                            'cooked': 'success',
-                            'delivered': 'primary',
-                            'billed': 'secondary'
-                        }.get(status, 'secondary')
-                    })
+        spots = cursor.fetchall()
+        
+        # Process spots to add additional information
+        for spot in spots:
+            if spot['order_id']:
+                # Get order items
+                cursor.execute("""
+                    SELECT od.*, m.item_name, m.category, m.item_price
+                    FROM order_details od
+                    JOIN menu m ON od.item_id = m.item_id
+                    WHERE od.order_id = %s
+                """, (spot['order_id'],))
                 
-                # Check if all items are billed
-                spot_data['all_billed'] = (row['total_items'] == row['billed_items'])
-            
-            spots_data.append(spot_data)
+                spot['order_items'] = cursor.fetchall()
+                spot['all_items_billed'] = spot['total_items'] == spot['billed_items'] and spot['total_items'] > 0
         
-        return render_template('waiter/dashboard.html', spots_data=spots_data)
-        
-    except Error as e:
-        flash(f'Database error: {str(e)}', 'danger')
-        return redirect(url_for('employee_login'))
+        return render_template('waiter/dashboard.html', spots=spots)
+    
+    except Exception as e:
+        flash(f'An error occurred: {str(e)}', 'danger')
+        return redirect(url_for('login'))
+    
     finally:
-        cursor.close()
-        conn.close()
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
 
 @app.route('/chef/dashboard')
 def chef_dashboard():
@@ -840,6 +891,95 @@ def place_order_final():
         if conn:
             conn.close()
             print("Database connection closed")
+
+@app.route('/waiter/spot/<int:spot_id>')
+def waiter_spot_details(spot_id):
+    if 'user_id' not in session or session.get('role') != 'waiter':
+        flash('Please login as a waiter to access this page.', 'danger')
+        return redirect(url_for('login'))
+    
+    conn = None
+    cursor = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+        
+        # First, get the waiter_id
+        cursor.execute("SELECT waiter_id FROM waiter WHERE emp_id = %s", (session['user_id'],))
+        waiter = cursor.fetchone()
+        
+        if not waiter:
+            flash('Waiter not found.', 'danger')
+            return redirect(url_for('login'))
+        
+        # Get spot details
+        cursor.execute("""
+            SELECT s.*, c.c_name, c.c_phone, c.loyal_pts
+            FROM spots s
+            LEFT JOIN customer c ON s.cust_id = c.cust_id
+            WHERE s.table_id = %s AND s.waiter_id = %s
+        """, (spot_id, waiter['waiter_id']))
+        
+        spot = cursor.fetchone()
+        
+        if not spot:
+            flash('Spot not found or not assigned to you.', 'danger')
+            return redirect(url_for('waiter_dashboard'))
+        
+        # Get current order if exists
+        order = None
+        if not spot['availability'] and spot['cust_id']:
+            cursor.execute("""
+                SELECT o.order_id, o.time_stamp, o.paid_status
+                FROM orders o
+                WHERE o.cust_id = %s AND o.paid_status = 0
+                ORDER BY o.time_stamp DESC
+                LIMIT 1
+            """, (spot['cust_id'],))
+            
+            order = cursor.fetchone()
+            
+            if order:
+                # Get order items with chef information
+                cursor.execute("""
+                    SELECT od.*, m.item_name, m.category, m.item_price, e.e_name as chef_name
+                    FROM order_details od
+                    JOIN menu m ON od.item_id = m.item_id
+                    LEFT JOIN employee e ON od.chef_id = e.emp_id
+                    WHERE od.order_id = %s
+                """, (order['order_id'],))
+                
+                order_items = cursor.fetchall()
+                
+                # Process order items
+                for item in order_items:
+                    # Add status color
+                    status_colors = {
+                        'placed': 'warning',
+                        'cooking': 'info',
+                        'cooked': 'success',
+                        'delivered': 'primary',
+                        'billed': 'secondary'
+                    }
+                    item['status_color'] = status_colors.get(item['order_status'], 'secondary')
+                
+                order['items'] = order_items
+                
+                # Check if all items are billed
+                all_billed = all(item['order_status'] == 'billed' for item in order_items)
+                order['all_billed'] = all_billed
+        
+        return render_template('waiter/spot_details.html', spot=spot, order=order)
+    
+    except Exception as e:
+        flash(f'An error occurred: {str(e)}', 'danger')
+        return redirect(url_for('waiter_dashboard'))
+    
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
 
 if __name__ == '__main__':
     app.run(debug=True) 
