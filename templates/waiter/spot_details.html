@@ -92,35 +92,41 @@
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {% for item in order.items %}
-                                    <tr>
-                                        <td>{{ item.item_name }}</td>
-                                        <td>{{ item.category }}</td>
-                                        <td>{{ item.qty }}</td>
-                                        <td>₹{{ "%.2f"|format(item.item_price) }}</td>
-                                        <td>
-                                            <span class="badge bg-{{ item.status_color }}">
-                                                {{ item.order_status|title }}
-                                            </span>
-                                        </td>
-                                        <td>
-                                            {% if item.chef_id %}
-                                            <span class="badge bg-info">{{ item.chef_name or 'Chef #' + item.chef_id|string }}</span>
-                                            {% else %}
-                                            <span class="badge bg-secondary">Not assigned</span>
-                                            {% endif %}
-                                        </td>
-                                        <td>
-                                            {% if item.order_status == 'cooked' %}
-                                            <button class="btn btn-sm btn-success mark-delivered" 
-                                                    data-order-id="{{ order.order_id }}"
-                                                    data-item-id="{{ item.item_id }}">
-                                                <i class="fas fa-check me-1"></i>Mark Delivered
-                                            </button>
-                                            {% endif %}
-                                        </td>
-                                    </tr>
-                                    {% endfor %}
+                                    {% if order and order.get('items', []) %}
+                                        {% for item in order.get('items', []) %}
+                                        <tr>
+                                            <td>{{ item.item_name }}</td>
+                                            <td>{{ item.category }}</td>
+                                            <td>{{ item.qty }}</td>
+                                            <td>₹{{ "%.2f"|format(item.item_price) }}</td>
+                                            <td>
+                                                <span class="badge bg-{{ item.status_color }}">
+                                                    {{ item.order_status|title }}
+                                                </span>
+                                            </td>
+                                            <td>
+                                                {% if item.chef_id %}
+                                                <span class="badge bg-info">{{ item.chef_name or 'Chef #' + item.chef_id|string }}</span>
+                                                {% else %}
+                                                <span class="badge bg-secondary">Not assigned</span>
+                                                {% endif %}
+                                            </td>
+                                            <td>
+                                                {% if item.order_status == 'cooked' %}
+                                                <button class="btn btn-sm btn-success mark-delivered" 
+                                                        data-order-id="{{ order.order_id }}"
+                                                        data-item-id="{{ item.item_id }}">
+                                                    <i class="fas fa-check me-1"></i>Mark Delivered
+                                                </button>
+                                                {% endif %}
+                                            </td>
+                                        </tr>
+                                        {% endfor %}
+                                    {% else %}
+                                        <tr>
+                                            <td colspan="7" class="text-center">No items found in this order.</td>
+                                        </tr>
+                                    {% endif %}
                                 </tbody>
                             </table>
                         </div>

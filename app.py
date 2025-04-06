@@ -473,7 +473,7 @@ def remove_order_item():
 def waiter_dashboard():
     if 'user_id' not in session or session.get('role') != 'waiter':
         flash('Please login as a waiter to access this page.', 'danger')
-        return redirect(url_for('login'))
+        return redirect(url_for('employee_login'))
     
     conn = None
     cursor = None
@@ -487,7 +487,7 @@ def waiter_dashboard():
         
         if not waiter:
             flash('Waiter not found.', 'danger')
-            return redirect(url_for('login'))
+            return redirect(url_for('employee_login'))
         
         # Get waiter's spots (limited to 3)
         cursor.execute("""
@@ -516,6 +516,9 @@ def waiter_dashboard():
         
         # Process spots to add additional information
         for spot in spots:
+            # Initialize order_items as an empty list
+            spot['order_items'] = []
+            
             if spot['order_id']:
                 # Get order items
                 cursor.execute("""
@@ -525,14 +528,32 @@ def waiter_dashboard():
                     WHERE od.order_id = %s
                 """, (spot['order_id'],))
                 
-                spot['order_items'] = cursor.fetchall()
+                items = cursor.fetchall()
+                
+                # Process each item
+                for item in items:
+                    # Add status color
+                    status_colors = {
+                        'placed': 'warning',
+                        'cooking': 'info',
+                        'cooked': 'success',
+                        'delivered': 'primary',
+                        'billed': 'secondary'
+                    }
+                    item['status_color'] = status_colors.get(item['order_status'], 'secondary')
+                    spot['order_items'].append(item)
+                
+                # Check if all items are billed
                 spot['all_items_billed'] = spot['total_items'] == spot['billed_items'] and spot['total_items'] > 0
         
         return render_template('waiter/dashboard.html', spots=spots)
     
     except Exception as e:
+        import traceback
+        print(f"Error in waiter_dashboard: {str(e)}")
+        print(traceback.format_exc())
         flash(f'An error occurred: {str(e)}', 'danger')
-        return redirect(url_for('login'))
+        return redirect(url_for('employee_login'))
     
     finally:
         if cursor:
@@ -892,11 +913,11 @@ def place_order_final():
             conn.close()
             print("Database connection closed")
 
-@app.route('/waiter/spot/<int:spot_id>')
-def waiter_spot_details(spot_id):
+@app.route('/waiter/spot/<int:table_id>')
+def waiter_spot_details(table_id):
     if 'user_id' not in session or session.get('role') != 'waiter':
         flash('Please login as a waiter to access this page.', 'danger')
-        return redirect(url_for('login'))
+        return redirect(url_for('employee_login'))
     
     conn = None
     cursor = None
@@ -910,7 +931,7 @@ def waiter_spot_details(spot_id):
         
         if not waiter:
             flash('Waiter not found.', 'danger')
-            return redirect(url_for('login'))
+            return redirect(url_for('employee_login'))
         
         # Get spot details
         cursor.execute("""
@@ -918,7 +939,7 @@ def waiter_spot_details(spot_id):
             FROM spots s
             LEFT JOIN customer c ON s.cust_id = c.cust_id
             WHERE s.table_id = %s AND s.waiter_id = %s
-        """, (spot_id, waiter['waiter_id']))
+        """, (table_id, waiter['waiter_id']))
         
         spot = cursor.fetchone()
         
@@ -926,8 +947,10 @@ def waiter_spot_details(spot_id):
             flash('Spot not found or not assigned to you.', 'danger')
             return redirect(url_for('waiter_dashboard'))
         
-        # Get current order if exists
+        # Initialize order as None
         order = None
+        
+        # Get current order if exists
         if not spot['availability'] and spot['cust_id']:
             cursor.execute("""
                 SELECT o.order_id, o.time_stamp, o.paid_status
@@ -937,9 +960,17 @@ def waiter_spot_details(spot_id):
                 LIMIT 1
             """, (spot['cust_id'],))
             
-            order = cursor.fetchone()
+            order_data = cursor.fetchone()
             
-            if order:
+            if order_data:
+                # Create a new dictionary for the order
+                order = {
+                    'order_id': order_data['order_id'],
+                    'time_stamp': order_data['time_stamp'],
+                    'paid_status': order_data['paid_status'],
+                    'items': []  # Initialize as an empty list
+                }
+                
                 # Get order items with chef information
                 cursor.execute("""
                     SELECT od.*, m.item_name, m.category, m.item_price, e.e_name as chef_name
@@ -947,12 +978,12 @@ def waiter_spot_details(spot_id):
                     JOIN menu m ON od.item_id = m.item_id
                     LEFT JOIN employee e ON od.chef_id = e.emp_id
                     WHERE od.order_id = %s
-                """, (order['order_id'],))
+                """, (order_data['order_id'],))
                 
-                order_items = cursor.fetchall()
+                items = cursor.fetchall()
                 
                 # Process order items
-                for item in order_items:
+                for item in items:
                     # Add status color
                     status_colors = {
                         'placed': 'warning',
@@ -962,16 +993,17 @@ def waiter_spot_details(spot_id):
                         'billed': 'secondary'
                     }
                     item['status_color'] = status_colors.get(item['order_status'], 'secondary')
-                
-                order['items'] = order_items
+                    order['items'].append(item)
                 
                 # Check if all items are billed
-                all_billed = all(item['order_status'] == 'billed' for item in order_items)
-                order['all_billed'] = all_billed
+                order['all_billed'] = all(item['order_status'] == 'billed' for item in order['items'])
         
         return render_template('waiter/spot_details.html', spot=spot, order=order)
     
     except Exception as e:
+        import traceback
+        print(f"Error in waiter_spot_details: {str(e)}")
+        print(traceback.format_exc())
         flash(f'An error occurred: {str(e)}', 'danger')
         return redirect(url_for('waiter_dashboard'))
     
