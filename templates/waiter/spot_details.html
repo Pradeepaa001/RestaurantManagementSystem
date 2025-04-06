@@ -112,13 +112,15 @@
                                                 {% endif %}
                                             </td>
                                             <td>
-                                                {% if item.order_status == 'cooked' %}
-                                                <button class="btn btn-sm btn-success mark-delivered" 
+                                                <select class="form-select form-select-sm update-status" 
                                                         data-order-id="{{ order.order_id }}"
                                                         data-item-id="{{ item.item_id }}">
-                                                    <i class="fas fa-check me-1"></i>Mark Delivered
-                                                </button>
-                                                {% endif %}
+                                                    <option value="placed" {% if item.order_status == 'placed' %}selected{% endif %}>Placed</option>
+                                                    <option value="cooking" {% if item.order_status == 'cooking' %}selected{% endif %}>Cooking</option>
+                                                    <option value="cooked" {% if item.order_status == 'cooked' %}selected{% endif %}>Cooked</option>
+                                                    <option value="delivered" {% if item.order_status == 'delivered' %}selected{% endif %}>Delivered</option>
+                                                    <option value="billed" {% if item.order_status == 'billed' %}selected{% endif %}>Billed</option>
+                                                </select>
                                             </td>
                                         </tr>
                                         {% endfor %}
@@ -167,11 +169,12 @@
 {% block extra_js %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // Mark item as delivered
-    document.querySelectorAll('.mark-delivered').forEach(button => {
-        button.addEventListener('click', function() {
+    // Update order status
+    document.querySelectorAll('.update-status').forEach(select => {
+        select.addEventListener('change', function() {
             const orderId = this.dataset.orderId;
             const itemId = this.dataset.itemId;
+            const status = this.value;
             
             fetch('/update_order_status', {
                 method: 'POST',
@@ -181,7 +184,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 body: JSON.stringify({
                     order_id: orderId,
                     item_id: itemId,
-                    status: 'delivered'
+                    status: status
                 })
             })
             .then(response => response.json())

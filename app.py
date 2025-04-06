@@ -588,71 +588,124 @@ def chef_dashboard():
 
 @app.route('/update_order_status', methods=['POST'])
 def update_order_status():
+    if 'user_id' not in session or session.get('role') != 'waiter':
+        return jsonify({'error': 'Unauthorized'}), 401
+    
     data = request.json
     order_id = data.get('order_id')
     item_id = data.get('item_id')
     status = data.get('status')
     
-    conn = get_db_connection()
-    cursor = conn.cursor()
+    if not all([order_id, item_id, status]):
+        return jsonify({'error': 'Missing required parameters'}), 400
     
+    conn = None
+    cursor = None
     try:
-        cursor.execute('''
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+        
+        # Verify the order belongs to a spot assigned to this waiter
+        cursor.execute("""
+            SELECT s.waiter_id 
+            FROM spots s
+            JOIN orders o ON s.cust_id = o.cust_id
+            WHERE o.order_id = %s AND s.waiter_id = (
+                SELECT waiter_id FROM waiter WHERE emp_id = %s
+            )
+        """, (order_id, session['user_id']))
+        
+        if not cursor.fetchone():
+            return jsonify({'error': 'Order not found or not authorized'}), 403
+        
+        # Update the order status
+        cursor.execute("""
             UPDATE order_details 
-            SET order_status = %s, chef_id = %s
+            SET order_status = %s
             WHERE order_id = %s AND item_id = %s
-        ''', (status, session.get('user_id'), order_id, item_id))
+        """, (status, order_id, item_id))
         
         conn.commit()
-        cursor.close()
-        conn.close()
-        
         return jsonify({'success': True})
-    except Error as e:
+        
+    except Exception as e:
+        if conn:
+            conn.rollback()
         return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
 
 @app.route('/generate_bill', methods=['POST'])
 def generate_bill():
+    if 'user_id' not in session or session.get('role') != 'waiter':
+        return jsonify({'error': 'Unauthorized'}), 401
+    
     data = request.json
     order_id = data.get('order_id')
     
-    conn = get_db_connection()
-    cursor = conn.cursor(dictionary=True)
+    if not order_id:
+        return jsonify({'error': 'Missing order_id'}), 400
     
+    conn = None
+    cursor = None
     try:
-        # Calculate total amount
-        cursor.execute('''
-            SELECT SUM(m.item_price * od.qty) as total
-            FROM order_details od
-            JOIN menu m ON od.item_id = m.item_id
-            WHERE od.order_id = %s
-        ''', (order_id,))
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+        
+        # Verify the order belongs to a spot assigned to this waiter
+        cursor.execute("""
+            SELECT s.waiter_id 
+            FROM spots s
+            JOIN orders o ON s.cust_id = o.cust_id
+            WHERE o.order_id = %s AND s.waiter_id = (
+                SELECT waiter_id FROM waiter WHERE emp_id = %s
+            )
+        """, (order_id, session['user_id']))
+        
+        if not cursor.fetchone():
+            return jsonify({'error': 'Order not found or not authorized'}), 403
+        
+        # Check if all items are delivered
+        cursor.execute("""
+            SELECT COUNT(*) as total,
+                   SUM(CASE WHEN order_status = 'delivered' THEN 1 ELSE 0 END) as delivered
+            FROM order_details
+            WHERE order_id = %s
+        """, (order_id,))
         
         result = cursor.fetchone()
-        total = result['total']
-        tax = total * 0.18  # 18% tax
-        final_amount = total + tax
+        if result['total'] != result['delivered']:
+            return jsonify({'error': 'All items must be delivered before generating bill'}), 400
         
-        # Create bill
-        cursor.execute('''
-            INSERT INTO bill (tot_amt, tax, final_amt, pay_mode, order_id, waiter_id)
-            VALUES (%s, %s, %s, %s, %s, %s)
-        ''', (total, tax, final_amount, 'online', order_id, session.get('user_id')))
+        # Update all items to billed status
+        cursor.execute("""
+            UPDATE order_details 
+            SET order_status = 'billed'
+            WHERE order_id = %s
+        """, (order_id,))
+        
+        # Update order paid status
+        cursor.execute("""
+            UPDATE orders 
+            SET paid_status = 1
+            WHERE order_id = %s
+        """, (order_id,))
         
         conn.commit()
-        cursor.close()
-        conn.close()
+        return jsonify({'success': True})
         
-        return jsonify({
-            'success': True,
-            'bill': {
-                'total': total,
-                'tax': tax,
-                'final_amount': final_amount
-            }
-        })
-    except Error as e:
+    except Exception as e:
+        if conn:
+            conn.rollback()
         return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
 
 @app.route('/logout')
 def logout():
