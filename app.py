@@ -972,6 +972,378 @@ def admin_dashboard():
         cursor.close()
         conn.close()
 
+@app.route('/admin/add_employee', methods=['GET', 'POST'])
+def admin_add_employee():
+    if 'user_id' not in session or session['role'] != 'admin':
+        return redirect(url_for('employee_login'))
+    
+    if request.method == 'POST':
+        name = request.form.get('name')
+        phone = request.form.get('phone')
+        role = request.form.get('role')
+        password = request.form.get('password')
+        salary = request.form.get('salary')
+        
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        try:
+            # Check if phone number already exists
+            cursor.execute('SELECT * FROM employee WHERE e_phone = %s', (phone,))
+            existing_employee = cursor.fetchone()
+            
+            if existing_employee:
+                flash('Phone number already registered.', 'danger')
+                return redirect(url_for('admin_add_employee'))
+            
+            # Insert new employee
+            cursor.execute('''
+                INSERT INTO employee (e_name, e_phone, role, passwd, salary) 
+                VALUES (%s, %s, %s, %s, %s)
+            ''', (name, phone, role, password, salary))
+            
+            # If role is waiter, add to waiter table
+            if role == 'waiter':
+                cursor.execute('SELECT emp_id FROM employee WHERE e_phone = %s', (phone,))
+                emp_id = cursor.fetchone()[0]
+                cursor.execute('INSERT INTO waiter (emp_id) VALUES (%s)', (emp_id,))
+            
+            conn.commit()
+            flash('Employee added successfully!', 'success')
+            return redirect(url_for('admin_dashboard'))
+            
+        except Exception as e:
+            conn.rollback()
+            flash(f'Error adding employee: {str(e)}', 'danger')
+            return redirect(url_for('admin_add_employee'))
+        finally:
+            cursor.close()
+            conn.close()
+    
+    return render_template('admin/add_employee.html')
+
+@app.route('/admin/manage_menu')
+def admin_manage_menu():
+    if 'user_id' not in session or session['role'] != 'admin':
+        return redirect(url_for('employee_login'))
+    
+    conn = get_db_connection()
+    if not conn:
+        flash('Database connection error', 'danger')
+        return redirect(url_for('admin_dashboard'))
+    
+    try:
+        cursor = conn.cursor(dictionary=True)
+        
+        # Get all menu items
+        cursor.execute('SELECT * FROM menu ORDER BY category, item_name')
+        menu_items = cursor.fetchall()
+        
+        return render_template('admin/manage_menu.html', menu_items=menu_items)
+    except Error as e:
+        flash(f'Database error: {str(e)}', 'danger')
+        return redirect(url_for('admin_dashboard'))
+    finally:
+        cursor.close()
+        conn.close()
+
+@app.route('/admin/add_menu_item', methods=['POST'])
+def admin_add_menu_item():
+    if not session.get('user_id') or session.get('role') != 'admin':
+        return jsonify({'success': False, 'error': 'Unauthorized'}), 403
+    
+    item_name = request.form.get('item_name')
+    category = request.form.get('category')
+    item_price = float(request.form.get('item_price'))
+    prep_time = int(request.form.get('prep_time'))
+    allergen = request.form.get('allergen')
+    description = request.form.get('description')
+    availability = 1 if request.form.get('availability') else 0
+    image_url = "/static/images/default.jpeg"  # Default image URL
+    
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    try:
+        cursor.execute('''
+            INSERT INTO menu (item_name, category, item_price, prep_time, allergen, description, availability, image_url)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+        ''', (item_name, category, item_price, prep_time, allergen, description, availability, image_url))
+        conn.commit()
+        flash('Menu item added successfully!', 'success')
+    except Exception as e:
+        conn.rollback()
+        flash(f'Error adding menu item: {str(e)}', 'error')
+    finally:
+        cursor.close()
+        conn.close()
+    
+    return redirect(url_for('admin_manage_menu'))
+
+@app.route('/admin/toggle_menu_item', methods=['POST'])
+def admin_toggle_menu_item():
+    if not session.get('user_id') or session.get('role') != 'admin':
+        return jsonify({'success': False, 'error': 'Unauthorized'}), 403
+    
+    data = request.get_json()
+    item_id = data.get('item_id')
+    
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    try:
+        cursor.execute('UPDATE menu SET availability = NOT availability WHERE item_id = %s', (item_id,))
+        conn.commit()
+        return jsonify({'success': True})
+    except Exception as e:
+        conn.rollback()
+        return jsonify({'success': False, 'error': str(e)})
+    finally:
+        cursor.close()
+        conn.close()
+
+@app.route('/admin/edit_menu_item/<int:item_id>', methods=['GET', 'POST'])
+def admin_edit_menu_item(item_id):
+    if not session.get('user_id') or session.get('role') != 'admin':
+        flash('Please login as admin to access this page.', 'error')
+        return redirect(url_for('login'))
+    
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+    
+    try:
+        if request.method == 'POST':
+            item_name = request.form.get('item_name')
+            category = request.form.get('category')
+            item_price = float(request.form.get('item_price'))
+            prep_time = int(request.form.get('prep_time'))
+            allergen = request.form.get('allergen')
+            description = request.form.get('description')
+            availability = 1 if request.form.get('availability') else 0
+            
+            cursor.execute('''
+                UPDATE menu 
+                SET item_name = %s, category = %s, item_price = %s, prep_time = %s, 
+                    allergen = %s, description = %s, availability = %s
+                WHERE item_id = %s
+            ''', (item_name, category, item_price, prep_time, allergen, description, availability, item_id))
+            conn.commit()
+            flash('Menu item updated successfully!', 'success')
+            return redirect(url_for('admin_manage_menu'))
+        
+        cursor.execute('SELECT * FROM menu WHERE item_id = %s', (item_id,))
+        item = cursor.fetchone()
+        if not item:
+            flash('Menu item not found.', 'error')
+            return redirect(url_for('admin_manage_menu'))
+        
+        return render_template('admin/edit_menu_item.html', item=item)
+    except Exception as e:
+        flash(f'Error: {str(e)}', 'error')
+        return redirect(url_for('admin_manage_menu'))
+    finally:
+        cursor.close()
+        conn.close()
+
+@app.route('/admin/reports')
+def admin_reports():
+    if not session.get('user_id') or session.get('role') != 'admin':
+        flash('Please login as admin to access this page.', 'error')
+        return redirect(url_for('login'))
+    
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+    
+    try:
+        # Get sales data for the last 30 days
+        cursor.execute('''
+            SELECT 
+                COUNT(DISTINCT o.order_id) as total_orders,
+                SUM(b.tot_amt) as total_sales,
+                AVG(b.tot_amt) as avg_order_value,
+                SUM(c.loyal_pts) as total_loyalty_points
+            FROM orders o
+            JOIN bill b ON o.order_id = b.order_id
+            JOIN customer c ON o.cust_id = c.cust_id
+            WHERE o.time_stamp >= DATE_SUB(CURRENT_DATE, INTERVAL 30 DAY)
+        ''')
+        sales_data = cursor.fetchone()
+        
+        # Get top selling items
+        cursor.execute('''
+            SELECT 
+                m.item_name,
+                m.category,
+                SUM(od.qty) as quantity_sold,
+                SUM(od.qty * m.item_price) as revenue
+            FROM order_details od
+            JOIN menu m ON od.item_id = m.item_id
+            JOIN orders o ON od.order_id = o.order_id
+            WHERE o.time_stamp >= DATE_SUB(CURRENT_DATE, INTERVAL 30 DAY)
+            GROUP BY m.item_id, m.item_name, m.category
+            ORDER BY quantity_sold DESC
+            LIMIT 5
+        ''')
+        top_items = cursor.fetchall()
+        
+        # Get sales by category
+        cursor.execute('''
+            SELECT 
+                m.category,
+                SUM(od.qty) as items_sold,
+                SUM(od.qty * m.item_price) as revenue,
+                (SUM(od.qty * m.item_price) / (
+                    SELECT SUM(od2.qty * m2.item_price)
+                    FROM order_details od2
+                    JOIN menu m2 ON od2.item_id = m2.item_id
+                    JOIN orders o2 ON od2.order_id = o2.order_id
+                    WHERE o2.time_stamp >= DATE_SUB(CURRENT_DATE, INTERVAL 30 DAY)
+                ) * 100) as percentage
+            FROM order_details od
+            JOIN menu m ON od.item_id = m.item_id
+            JOIN orders o ON od.order_id = o.order_id
+            WHERE o.time_stamp >= DATE_SUB(CURRENT_DATE, INTERVAL 30 DAY)
+            GROUP BY m.category
+            ORDER BY revenue DESC
+        ''')
+        category_sales = cursor.fetchall()
+        
+        return render_template('admin/reports.html', 
+                             sales_data=sales_data,
+                             top_items=top_items,
+                             category_sales=category_sales)
+    except Exception as e:
+        flash(f'Error generating reports: {str(e)}', 'error')
+        return redirect(url_for('admin_dashboard'))
+    finally:
+        cursor.close()
+        conn.close()
+
+@app.route('/admin/settings')
+def admin_settings():
+    if 'user_id' not in session or session['role'] != 'admin':
+        return redirect(url_for('employee_login'))
+    
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+    
+    try:
+        cursor.execute('SELECT * FROM settings')
+        settings = cursor.fetchone()
+        return render_template('admin/settings.html', settings=settings)
+    except Exception as e:
+        flash(f'Error loading settings: {str(e)}', 'error')
+        return redirect(url_for('admin_dashboard'))
+    finally:
+        cursor.close()
+        conn.close()
+
+@app.route('/admin/update_loyalty_settings', methods=['POST'])
+def admin_update_loyalty_settings():
+    if not session.get('user_id') or session.get('role') != 'admin':
+        flash('Please login as admin to access this page.', 'error')
+        return redirect(url_for('login'))
+    
+    points_per_rupee = float(request.form.get('points_per_rupee'))
+    rupee_per_point = float(request.form.get('rupee_per_point'))
+    min_points_redemption = int(request.form.get('min_points_redemption'))
+    
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    try:
+        cursor.execute('''
+            UPDATE settings 
+            SET points_per_rupee = %s, rupee_per_point = %s, min_points_redemption = %s
+        ''', (points_per_rupee, rupee_per_point, min_points_redemption))
+        conn.commit()
+        flash('Loyalty settings updated successfully!', 'success')
+    except Exception as e:
+        conn.rollback()
+        flash(f'Error updating loyalty settings: {str(e)}', 'error')
+    finally:
+        cursor.close()
+        conn.close()
+    
+    return redirect(url_for('admin_settings'))
+
+@app.route('/admin/update_tax_settings', methods=['POST'])
+def admin_update_tax_settings():
+    if not session.get('user_id') or session.get('role') != 'admin':
+        flash('Please login as admin to access this page.', 'error')
+        return redirect(url_for('login'))
+    
+    tax_rate = float(request.form.get('tax_rate'))
+    
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    try:
+        cursor.execute('UPDATE settings SET tax_rate = %s', (tax_rate,))
+        conn.commit()
+        flash('Tax settings updated successfully!', 'success')
+    except Exception as e:
+        conn.rollback()
+        flash(f'Error updating tax settings: {str(e)}', 'error')
+    finally:
+        cursor.close()
+        conn.close()
+    
+    return redirect(url_for('admin_settings'))
+
+@app.route('/admin/update_table_settings', methods=['POST'])
+def admin_update_table_settings():
+    if not session.get('user_id') or session.get('role') != 'admin':
+        flash('Please login as admin to access this page.', 'error')
+        return redirect(url_for('login'))
+    
+    total_tables = int(request.form.get('total_tables'))
+    
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    try:
+        cursor.execute('UPDATE settings SET total_tables = %s', (total_tables,))
+        conn.commit()
+        flash('Table settings updated successfully!', 'success')
+    except Exception as e:
+        conn.rollback()
+        flash(f'Error updating table settings: {str(e)}', 'error')
+    finally:
+        cursor.close()
+        conn.close()
+    
+    return redirect(url_for('admin_settings'))
+
+@app.route('/admin/update_system_settings', methods=['POST'])
+def admin_update_system_settings():
+    if not session.get('user_id') or session.get('role') != 'admin':
+        flash('Please login as admin to access this page.', 'error')
+        return redirect(url_for('login'))
+    
+    restaurant_name = request.form.get('restaurant_name')
+    restaurant_address = request.form.get('restaurant_address')
+    restaurant_phone = request.form.get('restaurant_phone')
+    
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    try:
+        cursor.execute('''
+            UPDATE settings 
+            SET restaurant_name = %s, restaurant_address = %s, restaurant_phone = %s
+        ''', (restaurant_name, restaurant_address, restaurant_phone))
+        conn.commit()
+        flash('System settings updated successfully!', 'success')
+    except Exception as e:
+        conn.rollback()
+        flash(f'Error updating system settings: {str(e)}', 'error')
+    finally:
+        cursor.close()
+        conn.close()
+    
+    return redirect(url_for('admin_settings'))
+
 @app.route('/close_order', methods=['POST'])
 def close_order():
     if 'user_id' not in session or session['role'] != 'waiter':
@@ -1350,6 +1722,79 @@ def customer_bill(order_id):
             cursor.close()
         if conn:
             conn.close()
+
+@app.route('/admin/employee_details')
+def admin_employee_details():
+    if 'user_id' not in session or session.get('role') != 'admin':
+        flash('Please login as admin to access this page.', 'error')
+        return redirect(url_for('login'))
+    
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+        
+        # Get all employees with correct column names based on the actual schema
+        cursor.execute("""
+            SELECT emp_id as employee_id, e_name as full_name, e_phone as phone, 
+                   role, e_status as is_active, salary 
+            FROM employee 
+            ORDER BY role, e_name
+        """)
+        
+        employees = cursor.fetchall()
+        cursor.close()
+        conn.close()
+        
+        return render_template('admin/employee_details.html', employees=employees)
+        
+    except Exception as e:
+        print(f"Error in admin_employee_details: {str(e)}")  # Add logging
+        flash('Error retrieving employee details. Please try again.', 'error')
+        return redirect(url_for('admin_dashboard'))
+
+@app.route('/admin/toggle_employee_status', methods=['POST'])
+def admin_toggle_employee_status():
+    if 'user_id' not in session or session.get('role') != 'admin':
+        return jsonify({'success': False, 'error': 'Unauthorized access'})
+    
+    try:
+        data = request.get_json()
+        employee_id = data.get('employee_id')
+        
+        if not employee_id:
+            return jsonify({'success': False, 'error': 'Employee ID is required'})
+        
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+        
+        # Get current status
+        cursor.execute("SELECT e_status FROM employee WHERE emp_id = %s", (employee_id,))
+        employee = cursor.fetchone()
+        
+        if not employee:
+            cursor.close()
+            conn.close()
+            return jsonify({'success': False, 'error': 'Employee not found'})
+        
+        # Toggle status between 'active' and 'inactive'
+        new_status = 'inactive' if employee['e_status'] == 'active' else 'active'
+        
+        # Update the status
+        cursor.execute("""
+            UPDATE employee 
+            SET e_status = %s 
+            WHERE emp_id = %s
+        """, (new_status, employee_id))
+        
+        conn.commit()
+        cursor.close()
+        conn.close()
+        
+        return jsonify({'success': True})
+        
+    except Exception as e:
+        print(f"Error in toggle_employee_status: {str(e)}")  # Add logging
+        return jsonify({'success': False, 'error': str(e)})
 
 if __name__ == '__main__':
     app.run(debug=True) 

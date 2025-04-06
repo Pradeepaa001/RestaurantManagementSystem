@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+
+{% block title %}Edit Menu Item - Restaurant RMS{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="row mb-4">
+        <div class="col-12">
+            <h2 class="text-center">
+                <i class="fas fa-edit food-icon"></i>
+                Edit Menu Item
+            </h2>
+            <p class="text-center text-muted">Update menu item details</p>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-8 mx-auto">
+            <div class="card shadow-sm">
+                <div class="card-header bg-primary text-white">
+                    <h3 class="card-title mb-0">Edit {{ item.item_name }}</h3>
+                </div>
+                <div class="card-body">
+                    <form method="POST" action="{{ url_for('admin_edit_menu_item', item_id=item.item_id) }}">
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="item_name" class="form-label">Item Name</label>
+                                <input type="text" class="form-control" id="item_name" name="item_name" 
+                                       value="{{ item.item_name }}" required>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label for="category" class="form-label">Category</label>
+                                <select class="form-select" id="category" name="category" required>
+                                    <option value="Tiffin" {% if item.category == 'Tiffin' %}selected{% endif %}>Tiffin</option>
+                                    <option value="Lunch" {% if item.category == 'Lunch' %}selected{% endif %}>Lunch</option>
+                                    <option value="Drinks" {% if item.category == 'Drinks' %}selected{% endif %}>Drinks</option>
+                                    <option value="Pizza" {% if item.category == 'Pizza' %}selected{% endif %}>Pizza</option>
+                                    <option value="Burgers" {% if item.category == 'Burgers' %}selected{% endif %}>Burger</option>
+                                    <option value="Salads" {% if item.category == 'Salads' %}selected{% endif %}>Salad</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="item_price" class="form-label">Price (₹)</label>
+                                <input type="number" class="form-control" id="item_price" name="item_price" 
+                                       value="{{ item.item_price }}" step="0.01" min="0" required>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label for="prep_time" class="form-label">Preparation Time (minutes)</label>
+                                <input type="number" class="form-control" id="prep_time" name="prep_time" 
+                                       value="{{ item.prep_time }}" min="1" required>
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label for="allergen" class="form-label">Allergens (comma separated)</label>
+                            <input type="text" class="form-control" id="allergen" name="allergen" 
+                                   value="{{ item.allergen }}" placeholder="e.g., nuts, dairy, gluten">
+                        </div>
+                        <div class="mb-3">
+                            <label for="description" class="form-label">Description</label>
+                            <textarea class="form-control" id="description" name="description" 
+                                      rows="3">{{ item.description }}</textarea>
+                        </div>
+                        <div class="mb-3 form-check">
+                            <input type="checkbox" class="form-check-input" id="availability" name="availability" 
+                                   {% if item.availability %}checked{% endif %}>
+                            <label class="form-check-label" for="availability">Available</label>
+                        </div>
+                        <div class="d-grid gap-2">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-save me-2"></i>Save Changes
+                            </button>
+                            <a href="{{ url_for('admin_manage_menu') }}" class="btn btn-outline-secondary">
+                                <i class="fas fa-times me-2"></i>Cancel
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %} 

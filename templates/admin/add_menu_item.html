@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+
+{% block title %}Add Menu Item - Restaurant RMS{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="row mb-4">
+        <div class="col-12">
+            <h2 class="text-center">
+                <i class="fas fa-plus-circle food-icon"></i>
+                Add New Menu Item
+            </h2>
+            <p class="text-center text-muted">Create a new menu item</p>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-8 mx-auto">
+            <div class="card shadow-sm">
+                <div class="card-header bg-primary text-white">
+                    <h3 class="card-title mb-0">Menu Item Details</h3>
+                </div>
+                <div class="card-body">
+                    <form method="POST" action="{{ url_for('admin_add_menu_item') }}">
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="item_name" class="form-label">Item Name</label>
+                                <input type="text" class="form-control" id="item_name" name="item_name" required>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label for="category" class="form-label">Category</label>
+                                <select class="form-select" id="category" name="category" required>
+                                    <option value="">Select a category</option>
+                                    <option value="Tiffin">Tiffin</option>
+                                    <option value="Lunch">Lunch</option>
+                                    <option value="Drinks">Drinks</option>
+                                    <option value="Pizza">Pizza</option>
+                                    <option value="Burgers">Burgers</option>
+                                    <option value="Salads">Salads</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="item_price" class="form-label">Price (₹)</label>
+                                <input type="number" class="form-control" id="item_price" name="item_price" step="0.01" min="0" required>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label for="prep_time" class="form-label">Preparation Time (minutes)</label>
+                                <input type="number" class="form-control" id="prep_time" name="prep_time" min="1" required>
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label for="allergen" class="form-label">Allergens (comma separated)</label>
+                            <input type="text" class="form-control" id="allergen" name="allergen" placeholder="e.g., nuts, dairy, gluten">
+                        </div>
+                        <div class="mb-3">
+                            <label for="description" class="form-label">Description</label>
+                            <textarea class="form-control" id="description" name="description" rows="3"></textarea>
+                        </div>
+                        <div class="mb-3 form-check">
+                            <input type="checkbox" class="form-check-input" id="availability" name="availability" checked>
+                            <label class="form-check-label" for="availability">Available</label>
+                        </div>
+                        <div class="d-grid gap-2">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-save me-2"></i>Add Menu Item
+                            </button>
+                            <a href="{{ url_for('admin_manage_menu') }}" class="btn btn-outline-secondary">
+                                <i class="fas fa-times me-2"></i>Cancel
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %} 

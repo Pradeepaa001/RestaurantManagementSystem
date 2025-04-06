@@ -84,23 +84,23 @@
                 </h3>
                 <div class="row g-3">
                     <div class="col-md-3">
-                        <a href="#" class="btn btn-primary w-100">
+                        <a href="{{ url_for('admin_add_employee') }}" class="btn btn-primary w-100">
                             <i class="fas fa-user-plus me-2"></i>Add Employee
                         </a>
                     </div>
                     <div class="col-md-3">
-                        <a href="#" class="btn btn-success w-100">
+                        <a href="{{ url_for('admin_manage_menu') }}" class="btn btn-success w-100">
                             <i class="fas fa-utensils me-2"></i>Manage Menu
                         </a>
                     </div>
                     <div class="col-md-3">
-                        <a href="#" class="btn btn-info w-100">
+                        <a href="{{ url_for('admin_reports') }}" class="btn btn-info w-100">
                             <i class="fas fa-chart-bar me-2"></i>View Reports
                         </a>
                     </div>
-                    <div class="col-md-3">
-                        <a href="#" class="btn btn-warning w-100">
-                            <i class="fas fa-cog me-2"></i>Settings
+                    <div class="col-md-3 mb-4">
+                        <a href="{{ url_for('admin_employee_details') }}" class="btn btn-warning w-100">
+                            <i class="fas fa-users me-2"></i>Employee Details
                         </a>
                     </div>
                 </div>

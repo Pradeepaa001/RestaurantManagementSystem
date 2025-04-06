@@ -38,13 +38,14 @@
             </div>
         </div>
 
-        {% for category_name, category_items in categories.items() %}
-        {% if category_items %}
+        {% set category_order = ['Tiffin', 'Lunch', 'Pizza', 'Burgers', 'Salads', 'Drinks'] %}
+        {% for category_name in category_order %}
+        {% if categories.get(category_name) %}
         <div class="category-section mb-5">
             <h3 class="mb-4">
                 <i class="fas fa-{% if category_name == 'Pizza' %}pizza-slice
-                             {% elif category_name == 'Burger' %}hamburger
-                             {% elif category_name == 'Salad' %}leaf
+                             {% elif category_name == 'Burgers' %}hamburger
+                             {% elif category_name == 'Salads' %}leaf
                              {% elif category_name == 'Tiffin' %}box
                              {% elif category_name == 'Lunch' %}utensils
                              {% elif category_name == 'Drinks' %}glass-martini
@@ -52,7 +53,7 @@
                 {{ category_name }}
             </h3>
             <div class="row">
-                {% for item in category_items %}
+                {% for item in categories.get(category_name) %}
                 <div class="col-md-4 mb-4">
                     <div class="card h-100">
                         {% if item.image_url %}
@@ -60,6 +61,9 @@
                         {% endif %}
                         <div class="card-body">
                             <h5 class="card-title">{{ item.item_name }}</h5>
+                            {% if item.description %}
+                            <p class="card-text">{{ item.description }}</p>
+                            {% endif %}
                             <p class="card-text">
                                 <small class="text-muted">
                                     <i class="fas fa-clock me-1"></i>Prep time: {{ item.prep_time }} mins
@@ -74,13 +78,14 @@
                             {% endif %}
                             <div class="d-flex justify-content-between align-items-center">
                                 <span class="h5 mb-0">₹{{ "%.2f"|format(item.item_price) }}</span>
-                                <div class="input-group" style="width: 120px;">
-                                    <button class="btn btn-outline-primary decrease-qty" type="button">-</button>
+                                <div class="input-group" style="width: 140px;">
+                                    <button class="btn btn-outline-primary decrease-qty" type="button" style="min-width: 40px;">-</button>
                                     <input type="number" class="form-control text-center item-qty" value="0" min="0" max="10" 
                                            data-item-id="{{ item.item_id }}"
                                            data-item-name="{{ item.item_name }}"
-                                           data-item-price="{{ item.item_price }}">
-                                    <button class="btn btn-outline-primary increase-qty" type="button">+</button>
+                                           data-item-price="{{ item.item_price }}"
+                                           style="min-width: 60px;">
+                                    <button class="btn btn-outline-primary increase-qty" type="button" style="min-width: 40px;">+</button>
                                 </div>
                             </div>
                         </div>

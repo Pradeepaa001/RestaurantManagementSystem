@@ -1,0 +1,144 @@
+{% extends "base.html" %}
+
+{% block title %}Settings - Restaurant RMS{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="row mb-4">
+        <div class="col-12">
+            <h2 class="text-center">
+                <i class="fas fa-cog food-icon"></i>
+                Settings
+            </h2>
+            <p class="text-center text-muted">Manage system settings and configurations</p>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-6 mb-4">
+            <div class="card shadow-sm">
+                <div class="card-header bg-primary text-white">
+                    <h3 class="card-title mb-0">Loyalty Program Settings</h3>
+                </div>
+                <div class="card-body">
+                    <form method="POST" action="{{ url_for('admin_update_loyalty_settings') }}">
+                        <div class="mb-3">
+                            <label for="points_per_rupee" class="form-label">Points per Rupee</label>
+                            <input type="number" class="form-control" id="points_per_rupee" name="points_per_rupee" 
+                                   value="{{ settings.points_per_rupee }}" step="0.01" min="0" required>
+                            <div class="form-text">Number of loyalty points earned per rupee spent</div>
+                        </div>
+                        <div class="mb-3">
+                            <label for="rupee_per_point" class="form-label">Rupee per Point</label>
+                            <input type="number" class="form-control" id="rupee_per_point" name="rupee_per_point" 
+                                   value="{{ settings.rupee_per_point }}" step="0.01" min="0" required>
+                            <div class="form-text">Value of one loyalty point in rupees when redeeming</div>
+                        </div>
+                        <div class="mb-3">
+                            <label for="min_points_redemption" class="form-label">Minimum Points for Redemption</label>
+                            <input type="number" class="form-control" id="min_points_redemption" name="min_points_redemption" 
+                                   value="{{ settings.min_points_redemption }}" min="0" required>
+                            <div class="form-text">Minimum number of points required for redemption</div>
+                        </div>
+                        <div class="d-grid">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-save me-2"></i>Save Loyalty Settings
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6 mb-4">
+            <div class="card shadow-sm">
+                <div class="card-header bg-primary text-white">
+                    <h3 class="card-title mb-0">Tax Settings</h3>
+                </div>
+                <div class="card-body">
+                    <form method="POST" action="{{ url_for('admin_update_tax_settings') }}">
+                        <div class="mb-3">
+                            <label for="tax_rate" class="form-label">Tax Rate (%)</label>
+                            <input type="number" class="form-control" id="tax_rate" name="tax_rate" 
+                                   value="{{ settings.tax_rate }}" step="0.01" min="0" max="100" required>
+                            <div class="form-text">Percentage of tax to be applied to orders</div>
+                        </div>
+                        <div class="d-grid">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-save me-2"></i>Save Tax Settings
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6 mb-4">
+            <div class="card shadow-sm">
+                <div class="card-header bg-primary text-white">
+                    <h3 class="card-title mb-0">Table Settings</h3>
+                </div>
+                <div class="card-body">
+                    <form method="POST" action="{{ url_for('admin_update_table_settings') }}">
+                        <div class="mb-3">
+                            <label for="total_tables" class="form-label">Total Number of Tables</label>
+                            <input type="number" class="form-control" id="total_tables" name="total_tables" 
+                                   value="{{ settings.total_tables }}" min="1" required>
+                            <div class="form-text">Total number of tables in the restaurant</div>
+                        </div>
+                        <div class="d-grid">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-save me-2"></i>Save Table Settings
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6 mb-4">
+            <div class="card shadow-sm">
+                <div class="card-header bg-primary text-white">
+                    <h3 class="card-title mb-0">System Settings</h3>
+                </div>
+                <div class="card-body">
+                    <form method="POST" action="{{ url_for('admin_update_system_settings') }}">
+                        <div class="mb-3">
+                            <label for="restaurant_name" class="form-label">Restaurant Name</label>
+                            <input type="text" class="form-control" id="restaurant_name" name="restaurant_name" 
+                                   value="{{ settings.restaurant_name }}" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="restaurant_address" class="form-label">Restaurant Address</label>
+                            <textarea class="form-control" id="restaurant_address" name="restaurant_address" 
+                                      rows="3" required>{{ settings.restaurant_address }}</textarea>
+                        </div>
+                        <div class="mb-3">
+                            <label for="restaurant_phone" class="form-label">Restaurant Phone</label>
+                            <input type="tel" class="form-control" id="restaurant_phone" name="restaurant_phone" 
+                                   value="{{ settings.restaurant_phone }}" required>
+                        </div>
+                        <div class="d-grid">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-save me-2"></i>Save System Settings
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-12">
+            <div class="card shadow-sm">
+                <div class="card-footer bg-light">
+                    <a href="{{ url_for('admin_dashboard') }}" class="btn btn-outline-secondary">
+                        <i class="fas fa-arrow-left me-2"></i>Back to Dashboard
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %} 

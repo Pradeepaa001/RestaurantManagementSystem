@@ -1,0 +1,170 @@
+{% extends "base.html" %}
+
+{% block title %}Manage Menu - Restaurant RMS{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="row mb-4">
+        <div class="col-12">
+            <h2 class="text-center">
+                <i class="fas fa-utensils food-icon"></i>
+                Manage Menu
+            </h2>
+            <p class="text-center text-muted">Add, edit, or remove menu items</p>
+        </div>
+    </div>
+
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card shadow-sm">
+                <div class="card-header bg-primary text-white">
+                    <h3 class="card-title mb-0">Add New Item</h3>
+                </div>
+                <div class="card-body">
+                    <form method="POST" action="{{ url_for('admin_add_menu_item') }}">
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="item_name" class="form-label">Item Name</label>
+                                <input type="text" class="form-control" id="item_name" name="item_name" required>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label for="category" class="form-label">Category</label>
+                                <select class="form-select" id="category" name="category" required>
+                                    <option value="" selected disabled>Select a category</option>
+                                    <option value="Tiffin">Tiffin</option>
+                                    <option value="Lunch">Lunch</option>
+                                    <option value="Drinks">Drinks</option>
+                                    <option value="Pizza">Pizza</option>
+                                    <option value="Burgers">Burgers</option>
+                                    <option value="Salads">Salads</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="item_price" class="form-label">Price (₹)</label>
+                                <input type="number" class="form-control" id="item_price" name="item_price" step="0.01" min="0" required>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label for="prep_time" class="form-label">Preparation Time (minutes)</label>
+                                <input type="number" class="form-control" id="prep_time" name="prep_time" min="1" required>
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label for="allergen" class="form-label">Allergens (comma separated)</label>
+                            <input type="text" class="form-control" id="allergen" name="allergen" placeholder="e.g., nuts, dairy, gluten">
+                        </div>
+                        <div class="mb-3">
+                            <label for="description" class="form-label">Description</label>
+                            <textarea class="form-control" id="description" name="description" rows="3"></textarea>
+                        </div>
+                        <div class="mb-3 form-check">
+                            <input type="checkbox" class="form-check-input" id="availability" name="availability" checked>
+                            <label class="form-check-label" for="availability">Available</label>
+                        </div>
+                        <div class="d-grid">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-plus me-2"></i>Add Item
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-12">
+            <div class="card shadow-sm">
+                <div class="card-header bg-primary text-white">
+                    <h3 class="card-title mb-0">Menu Items</h3>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Name</th>
+                                    <th>Category</th>
+                                    <th>Price</th>
+                                    <th>Prep Time</th>
+                                    <th>Status</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for item in menu_items %}
+                                <tr>
+                                    <td>{{ item.item_id }}</td>
+                                    <td>{{ item.item_name }}</td>
+                                    <td>{{ item.category }}</td>
+                                    <td>₹{{ "%.2f"|format(item.item_price) }}</td>
+                                    <td>{{ item.prep_time }} min</td>
+                                    <td>
+                                        <span class="badge bg-{{ 'success' if item.availability else 'danger' }}">
+                                            {{ 'Available' if item.availability else 'Unavailable' }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <div class="btn-group" role="group">
+                                            <a href="{{ url_for('admin_edit_menu_item', item_id=item.item_id) }}" class="btn btn-sm btn-outline-primary">
+                                                <i class="fas fa-edit"></i>
+                                            </a>
+                                            <button type="button" class="btn btn-sm btn-outline-danger toggle-availability" data-item-id="{{ item.item_id }}" data-availability="{{ item.availability }}">
+                                                <i class="fas fa-{{ 'times' if item.availability else 'check' }}"></i>
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="card-footer bg-light">
+                    <a href="{{ url_for('admin_dashboard') }}" class="btn btn-outline-secondary">
+                        <i class="fas fa-arrow-left me-2"></i>Back to Dashboard
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Toggle item availability
+    document.querySelectorAll('.toggle-availability').forEach(button => {
+        button.addEventListener('click', function() {
+            const itemId = this.dataset.itemId;
+            const currentAvailability = this.dataset.availability === '1';
+            
+            if (confirm(`Are you sure you want to ${currentAvailability ? 'disable' : 'enable'} this item?`)) {
+                fetch('/admin/toggle_menu_item', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ item_id: itemId })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        location.reload();
+                    } else {
+                        alert('Error toggling item availability: ' + data.error);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('An error occurred while toggling item availability.');
+                });
+            }
+        });
+    });
+});
+</script>
+{% endblock %} 

@@ -1,0 +1,113 @@
+{% extends "base.html" %}
+
+{% block title %}Employee Details - Restaurant RMS{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="row mb-4">
+        <div class="col-12">
+            <h2 class="text-center">
+                <i class="fas fa-users food-icon"></i>
+                Employee Details
+            </h2>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-12">
+            <div class="card shadow-sm">
+                <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                    <h3 class="card-title mb-0">Employee List</h3>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Name</th>
+                                    <th>Phone</th>
+                                    <th>Role</th>
+                                    <th>Salary</th>
+                                    <th>Status</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for employee in employees %}
+                                <tr>
+                                    <td>{{ employee.employee_id }}</td>
+                                    <td>{{ employee.full_name }}</td>
+                                    <td>{{ employee.phone }}</td>
+                                    <td>
+                                        <span class="badge bg-{{ 'primary' if employee.role == 'admin' else 'info' }}">
+                                            {{ employee.role|title }}
+                                        </span>
+                                    </td>
+                                    <td>₹{{ employee.salary }}</td>
+                                    <td>
+                                        <span class="badge bg-{{ 'success' if employee.is_active == 'active' else 'danger' }}">
+                                            {{ employee.is_active|title }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <div class="btn-group" role="group">
+                                            <button type="button" class="btn btn-sm btn-outline-danger toggle-status" 
+                                                    data-employee-id="{{ employee.employee_id }}" 
+                                                    data-status="{{ employee.is_active }}">
+                                                <i class="fas fa-{{ 'times' if employee.is_active == 'active' else 'check' }}"></i>
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="card-footer bg-light">
+                    <a href="{{ url_for('admin_dashboard') }}" class="btn btn-outline-secondary">
+                        <i class="fas fa-arrow-left me-2"></i>Back to Dashboard
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Toggle employee status
+    document.querySelectorAll('.toggle-status').forEach(button => {
+        button.addEventListener('click', function() {
+            const employeeId = this.dataset.employeeId;
+            const currentStatus = this.dataset.status;
+            
+            if (confirm(`Are you sure you want to ${currentStatus === 'active' ? 'deactivate' : 'activate'} this employee?`)) {
+                fetch('/admin/toggle_employee_status', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ employee_id: employeeId })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        location.reload();
+                    } else {
+                        alert('Error toggling employee status: ' + data.error);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('An error occurred while toggling employee status.');
+                });
+            }
+        });
+    });
+});
+</script>
+{% endblock %} 
