@@ -1,0 +1,86 @@
+                    <div class="card-footer bg-light">
+                        {% if order.bill_status == 'pending' and order.all_items_delivered %}
+                        <div class="mb-3">
+                            <h5 class="text-muted">Bill Summary</h5>
+                            <table class="table table-sm">
+                                <tr>
+                                    <td>Total Amount:</td>
+                                    <td class="text-end">₹{{ "%.2f"|format(order.total_amount) }}</td>
+                                </tr>
+                                <tr>
+                                    <td>Tax (10%):</td>
+                                    <td class="text-end">₹{{ "%.2f"|format(order.total_amount * 0.1) }}</td>
+                                </tr>
+                                <tr class="fw-bold">
+                                    <td>Final Amount:</td>
+                                    <td class="text-end">₹{{ "%.2f"|format(order.total_amount * 1.1) }}</td>
+                                </tr>
+                            </table>
+                        </div>
+                        <button class="btn btn-primary w-100 request-bill" data-order-id="{{ order.order_id }}">
+                            <i class="fas fa-file-invoice-dollar me-2"></i>Request Bill
+                        </button>
+                        {% elif order.bill_status == 'requested' %}
+                        <div class="alert alert-info mb-3">
+                            <i class="fas fa-clock me-2"></i>Bill request sent to waiter
+                            <div class="mt-2 small">
+                                <strong>Total Amount:</strong> ₹{{ "%.2f"|format(order.bill.final_amt) }}<br>
+                                <strong>Status:</strong> Waiting for waiter approval
+                            </div>
+                        </div>
+                        {% elif order.bill_status == 'paid' %}
+                        <div class="alert alert-success mb-3">
+                            <i class="fas fa-check-circle me-2"></i>Bill paid
+                            <div class="mt-2 small">
+                                <strong>Total Amount:</strong> ₹{{ "%.2f"|format(order.bill.final_amt) }}<br>
+                                <strong>Payment Mode:</strong> {{ order.bill.pay_mode|title }}<br>
+                                <strong>Points Earned:</strong> {{ order.points_earned }}
+                            </div>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Request bill
+    document.querySelectorAll('.request-bill').forEach(button => {
+        button.addEventListener('click', function() {
+            const orderId = this.dataset.orderId;
+            
+            if (confirm('Are you sure you want to request the bill?')) {
+                fetch('/customer/request_bill', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        order_id: orderId
+                    })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        alert('Bill request sent successfully!');
+                        window.location.reload();
+                    } else {
+                        alert('Error requesting bill: ' + data.error);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('An error occurred while requesting the bill.');
+                });
+            }
+        });
+    });
+});
+</script>
+{% endblock %} 

@@ -3,103 +3,123 @@
 {% block title %}Waiter Dashboard - Restaurant RMS{% endblock %}
 
 {% block content %}
-<div class="container py-4">
-    <div class="row mb-4">
-        <div class="col-12">
-            <div class="d-flex justify-content-between align-items-center">
-                <h2>
-                    <i class="fas fa-concierge-bell me-2"></i>
-                    Waiter Dashboard
-                </h2>
-                <div>
-                    <span class="badge bg-primary me-2">Spots: {{ spots|length }}/3</span>
+<div class="row mb-4">
+    <div class="col-12">
+        <h2 class="text-center">
+            <i class="fas fa-concierge-bell food-icon"></i>
+            Waiter Dashboard
+        </h2>
+        <p class="text-center text-muted">Manage your assigned tables and orders</p>
+    </div>
+</div>
+
+<div class="row">
+    {% for spot in spots %}
+    <div class="col-md-4 mb-4">
+        <div class="card h-100">
+            <div class="card-header {% if spot.bill_status == 'requested' %}bg-warning{% else %}bg-light{% endif %}">
+                <h3 class="card-title mb-0">
+                    <i class="fas fa-chair me-2"></i>Table {{ spot.table_id }}
+                    {% if spot.bill_status == 'requested' %}
+                    <span class="badge bg-danger ms-2">Bill Requested</span>
+                    {% endif %}
+                </h3>
+            </div>
+            <div class="card-body">
+                {% if spot.availability %}
+                <p class="text-muted">Table is available</p>
+                {% else %}
+                <div class="mb-3">
+                    <h5>Customer Details</h5>
+                    <p class="mb-1"><strong>Name:</strong> {{ spot.c_name }}</p>
+                    <p class="mb-1"><strong>Phone:</strong> {{ spot.c_phone }}</p>
+                    <p class="mb-1"><strong>Loyalty Points:</strong> {{ spot.loyal_pts }}</p>
+                </div>
+                
+                {% if spot.order_id %}
+                <div class="mb-3">
+                    <h5>Current Order</h5>
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Item</th>
+                                    <th>Qty</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for item in spot.order_items %}
+                                <tr>
+                                    <td>{{ item.item_name }}</td>
+                                    <td>{{ item.qty }}</td>
+                                    <td>
+                                        <span class="badge bg-{{ item.status_color }}">
+                                            {{ item.order_status }}
+                                        </span>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                {% else %}
+                <p class="text-muted">No active order</p>
+                {% endif %}
+                {% endif %}
+            </div>
+            <div class="card-footer bg-light">
+                <div class="d-flex justify-content-between">
+                    <a href="{{ url_for('waiter_spot_details', table_id=spot.table_id) }}" class="btn btn-primary">
+                        <i class="fas fa-info-circle me-2"></i>View Details
+                    </a>
+                    
+                    {% if spot.bill_status == 'requested' %}
+                    <button class="btn btn-success approve-bill-btn" data-order-id="{{ spot.order_id }}">
+                        <i class="fas fa-check me-2"></i>Approve Bill
+                    </button>
+                    {% endif %}
                 </div>
             </div>
         </div>
     </div>
-
-    <div class="row">
-        {% for i in range(3) %}
-        <div class="col-md-4 mb-4">
-            {% if i < spots|length %}
-                {% set spot = spots[i] %}
-                <div class="card shadow-sm h-100 {% if not spot.availability %}border-danger{% endif %}">
-                    <div class="card-header {% if spot.availability %}bg-success{% else %}bg-danger{% endif %} text-white">
-                        <h4 class="mb-0">
-                            <i class="fas fa-chair me-2"></i>
-                            Spot {{ spot.table_id }}
-                        </h4>
-                    </div>
-                    <div class="card-body">
-                        <div class="mb-3">
-                            <h5 class="text-muted">Seats</h5>
-                            <p class="h5">4</p>
-                        </div>
-                        
-                        <div class="mb-3">
-                            <h5 class="text-muted">Status</h5>
-                            {% if spot.availability %}
-                            <span class="badge bg-success">Available</span>
-                            {% else %}
-                            <span class="badge bg-danger">Occupied</span>
-                            {% endif %}
-                        </div>
-
-                        {% if not spot.availability %}
-                        <div class="mb-3">
-                            <h5 class="text-muted">Customer</h5>
-                            <p class="h5">{{ spot.c_name }}</p>
-                        </div>
-
-                        {% if spot.order_id %}
-                        <div class="mb-3">
-                            <h5 class="text-muted">Order ID</h5>
-                            <p>{{ spot.order_id }}</p>
-                        </div>
-
-                        <div class="mb-3">
-                            <h5 class="text-muted">Order Status</h5>
-                            <span class="badge bg-{{ 'success' if spot.all_items_billed else 'warning' }}">
-                                {{ 'Paid' if spot.all_items_billed else 'Unpaid' }}
-                            </span>
-                        </div>
-                        {% endif %}
-                        {% endif %}
-                    </div>
-                    <div class="card-footer bg-light">
-                        <a href="{{ url_for('waiter_spot_details', table_id=spot.table_id) }}" class="btn btn-primary w-100">
-                            <i class="fas fa-info-circle me-2"></i>View Details
-                        </a>
-                    </div>
-                </div>
-            {% else %}
-                <div class="card shadow-sm h-100 border-secondary">
-                    <div class="card-header bg-secondary text-white">
-                        <h4 class="mb-0">
-                            <i class="fas fa-chair me-2"></i>
-                            No Spot Assigned
-                        </h4>
-                    </div>
-                    <div class="card-body">
-                        <div class="mb-3">
-                            <h5 class="text-muted">Seats</h5>
-                            <p class="h5">4</p>
-                        </div>
-                        
-                        <div class="mb-3">
-                            <h5 class="text-muted">Status</h5>
-                            <span class="badge bg-secondary">Unassigned</span>
-                        </div>
-                    </div>
-                    <div class="card-footer bg-light">
-                        <button class="btn btn-secondary w-100" disabled>
-                            <i class="fas fa-info-circle me-2"></i>No Details Available
-                        </button>
-                    </div>
-                </div>
-            {% endif %}
-        </div>
-        {% endfor %}
-    </div>
+    {% endfor %}
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Approve bill
+    document.querySelectorAll('.approve-bill-btn').forEach(button => {
+        button.addEventListener('click', function() {
+            const orderId = this.dataset.orderId;
+            
+            if (confirm('Are you sure you want to approve this bill?')) {
+                fetch('/waiter/approve_bill', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ order_id: orderId })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        alert('Bill approved successfully. Customer earned ' + data.bill.points_earned + ' loyalty points.');
+                        location.reload();
+                    } else {
+                        alert('Error approving bill: ' + data.error);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('An error occurred while approving the bill.');
+                });
+            }
+        });
+    });
+});
+</script>
 {% endblock %} 

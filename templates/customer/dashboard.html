@@ -13,8 +13,8 @@
     </div>
 </div>
 
-<div class="row">
-    <div class="col-md-6 mb-4">
+<div class="row justify-content-center">
+    <div class="col-md-8 mb-4">
         <div class="card h-100">
             <div class="card-header">
                 <h3 class="card-title mb-0">
@@ -61,68 +61,22 @@
                         </tbody>
                     </table>
                 </div>
-                <div class="text-end mt-3">
+                <div class="d-flex justify-content-between mt-3">
                     <a href="{{ url_for('menu') }}" class="btn btn-primary">
                         <i class="fas fa-plus me-2"></i>Add More Items
                     </a>
+                    
+                    {% if current_order.all_delivered %}
+                    <button id="request-bill-btn" class="btn btn-success" data-order-id="{{ current_order.order_id }}">
+                        <i class="fas fa-file-invoice-dollar me-2"></i>Request Bill
+                    </button>
+                    {% endif %}
                 </div>
                 {% else %}
                 <p class="text-muted">No active order. Visit the menu to place an order.</p>
                 <a href="{{ url_for('menu') }}" class="btn btn-primary">
                     <i class="fas fa-utensils me-2"></i>View Menu
                 </a>
-                {% endif %}
-            </div>
-        </div>
-    </div>
-
-    <div class="col-md-6 mb-4">
-        <div class="card h-100">
-            <div class="card-header">
-                <h3 class="card-title mb-0">
-                    <i class="fas fa-history me-2"></i>Order History
-                </h3>
-            </div>
-            <div class="card-body">
-                {% if orders %}
-                <div class="table-responsive">
-                    <table class="table">
-                        <thead>
-                            <tr>
-                                <th>Order ID</th>
-                                <th>Date</th>
-                                <th>Items</th>
-                                <th>Total</th>
-                                <th>Status</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for order in orders %}
-                            <tr>
-                                <td>#{{ order.order_id }}</td>
-                                <td>{{ order.time_stamp.strftime('%Y-%m-%d %H:%M') }}</td>
-                                <td>
-                                    {% if order.order_items %}
-                                    {% for item in order.order_items %}
-                                    {{ item.item_name }} ({{ item.qty }})<br>
-                                    {% endfor %}
-                                    {% else %}
-                                    No items
-                                    {% endif %}
-                                </td>
-                                <td>₹{{ "%.2f"|format(order.total) }}</td>
-                                <td>
-                                    <span class="badge bg-{{ order.status_color }}">
-                                        {{ order.status }}
-                                    </span>
-                                </td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-                {% else %}
-                <p class="text-muted">No order history yet.</p>
                 {% endif %}
             </div>
         </div>
@@ -165,6 +119,37 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     });
+    
+    // Request bill
+    const requestBillBtn = document.getElementById('request-bill-btn');
+    if (requestBillBtn) {
+        requestBillBtn.addEventListener('click', function() {
+            const orderId = this.dataset.orderId;
+            
+            if (confirm('Are you sure you want to request the bill? This will notify your waiter.')) {
+                fetch('/request_bill', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ order_id: orderId })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        alert('Bill request sent to your waiter. They will process it shortly.');
+                        location.reload();
+                    } else {
+                        alert('Error requesting bill: ' + data.error);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('An error occurred while requesting the bill.');
+                });
+            }
+        });
+    }
 });
 </script>
 {% endblock %} 

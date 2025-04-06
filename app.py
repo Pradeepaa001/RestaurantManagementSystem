@@ -5,6 +5,7 @@ import os
 from datetime import datetime
 import json
 from dotenv import load_dotenv
+from decimal import Decimal
 
 # Load environment variables
 load_dotenv()
@@ -66,11 +67,6 @@ def customer_login():
                 cursor.execute("""
                     SELECT s.* FROM spots s
                     WHERE s.availability = 1
-                    AND s.waiter_id IN (
-                        SELECT waiter_id FROM waiter
-                        WHERE (SELECT COUNT(*) FROM spots s2 
-                              WHERE s2.waiter_id = waiter.waiter_id) < 3
-                    )
                     LIMIT 1
                 """)
                 available_spot = cursor.fetchone()
@@ -192,7 +188,7 @@ def customer_dashboard():
         cursor.execute('SELECT * FROM customer WHERE cust_id = %s', (session['user_id'],))
         customer = cursor.fetchone()
         
-        # Get current unpaid order
+        # Get current order (unpaid)
         cursor.execute('''
             SELECT o.order_id, o.time_stamp, o.paid_status
             FROM orders o
@@ -214,6 +210,7 @@ def customer_dashboard():
                 WHERE od.order_id = %s
             ''', (current_order['order_id'],))
             
+            all_delivered = True
             for item in cursor.fetchall():
                 status_color = {
                     'placed': 'warning',
@@ -223,6 +220,10 @@ def customer_dashboard():
                     'billed': 'secondary'
                 }.get(item['order_status'], 'secondary')
                 
+                # Check if all items are delivered
+                if item['order_status'] != 'delivered' and item['order_status'] != 'billed':
+                    all_delivered = False
+                
                 current_order['order_items'].append({
                     'item_id': item['item_id'],
                     'item_name': item['item_name'],
@@ -230,41 +231,13 @@ def customer_dashboard():
                     'order_status': item['order_status'],
                     'status_color': status_color
                 })
-        
-        # Get order history (paid orders)
-        cursor.execute('''
-            SELECT o.order_id, o.time_stamp, o.paid_status,
-                   GROUP_CONCAT(CONCAT(m.item_name, ':', od.qty) SEPARATOR '|') as items,
-                   SUM(m.item_price * od.qty) as total
-            FROM orders o
-            JOIN order_details od ON o.order_id = od.order_id
-            JOIN menu m ON od.item_id = m.item_id
-            WHERE o.cust_id = %s AND o.paid_status = TRUE
-            GROUP BY o.order_id, o.time_stamp, o.paid_status
-            ORDER BY o.time_stamp DESC
-        ''', (session['user_id'],))
-        
-        orders = []
-        for row in cursor.fetchall():
-            order_items = []
-            if row['items']:  # Check if items exist
-                for item in row['items'].split('|'):
-                    name, qty = item.split(':')
-                    order_items.append({'item_name': name, 'qty': int(qty)})
             
-            orders.append({
-                'order_id': row['order_id'],
-                'time_stamp': row['time_stamp'],
-                'order_items': order_items,
-                'total': float(row['total']) if row['total'] else 0.0,
-                'status': 'Completed',
-                'status_color': 'success'
-            })
+            # Add all_delivered flag to current_order
+            current_order['all_delivered'] = all_delivered
         
         return render_template('customer/dashboard.html', 
                               customer=customer, 
-                              current_order=current_order,
-                              orders=orders)
+                              current_order=current_order)
         
     except Error as e:
         flash(f'Database error: {str(e)}', 'danger')
@@ -469,10 +442,70 @@ def remove_order_item():
         if conn:
             conn.close()
 
+@app.route('/request_bill', methods=['POST'])
+def request_bill():
+    if 'user_id' not in session or session.get('role') != 'customer':
+        return jsonify({'error': 'Unauthorized'}), 401
+    
+    data = request.json
+    order_id = data.get('order_id')
+    
+    if not order_id:
+        return jsonify({'error': 'Missing order_id'}), 400
+    
+    conn = None
+    cursor = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+        
+        # Verify the order belongs to the current customer
+        cursor.execute("""
+            SELECT o.order_id, o.cust_id, s.table_id, s.waiter_id
+            FROM orders o
+            JOIN spots s ON o.cust_id = s.cust_id
+            WHERE o.order_id = %s AND o.cust_id = %s AND o.paid_status = 0
+        """, (order_id, session['user_id']))
+        
+        order_data = cursor.fetchone()
+        if not order_data:
+            return jsonify({'error': 'Order not found or not authorized'}), 403
+        
+        # Check if all items are delivered
+        cursor.execute("""
+            SELECT COUNT(*) as total,
+                   SUM(CASE WHEN order_status = 'delivered' THEN 1 ELSE 0 END) as delivered
+            FROM order_details
+            WHERE order_id = %s
+        """, (order_id,))
+        
+        result = cursor.fetchone()
+        if result['total'] != result['delivered']:
+            return jsonify({'error': 'All items must be delivered before requesting bill'}), 400
+        
+        # Update order bill_status to requested
+        cursor.execute("""
+            UPDATE orders 
+            SET bill_status = 'requested'
+            WHERE order_id = %s
+        """, (order_id,))
+        
+        conn.commit()
+        return jsonify({'success': True})
+        
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
 @app.route('/waiter/dashboard')
 def waiter_dashboard():
     if 'user_id' not in session or session.get('role') != 'waiter':
-        flash('Please login as a waiter to access this page.', 'danger')
         return redirect(url_for('employee_login'))
     
     conn = None
@@ -481,35 +514,24 @@ def waiter_dashboard():
         conn = get_db_connection()
         cursor = conn.cursor(dictionary=True)
         
-        # First, get the waiter_id
+        # Get waiter_id
         cursor.execute("SELECT waiter_id FROM waiter WHERE emp_id = %s", (session['user_id'],))
         waiter = cursor.fetchone()
         
         if not waiter:
-            flash('Waiter not found.', 'danger')
             return redirect(url_for('employee_login'))
         
-        # Get waiter's spots (limited to 3)
+        # Get waiter's spots with pending bill requests
         cursor.execute("""
             SELECT s.table_id, s.availability, s.cust_id, c.c_name, c.c_phone, c.loyal_pts,
-                   o.order_id, o.paid_status,
+                   o.order_id, o.paid_status, o.bill_status,
                    (SELECT COUNT(*) FROM order_details od WHERE od.order_id = o.order_id) as total_items,
-                   (SELECT COUNT(*) FROM order_details od WHERE od.order_id = o.order_id AND od.order_status = 'billed') as billed_items
+                   (SELECT COUNT(*) FROM order_details od WHERE od.order_id = o.order_id AND od.order_status = 'delivered') as delivered_items
             FROM spots s
             LEFT JOIN customer c ON s.cust_id = c.cust_id
-            LEFT JOIN (
-                SELECT * FROM orders 
-                WHERE paid_status = 0 
-                AND order_id IN (
-                    SELECT MAX(order_id) 
-                    FROM orders 
-                    WHERE paid_status = 0 
-                    GROUP BY cust_id
-                )
-            ) o ON s.cust_id = o.cust_id
+            LEFT JOIN orders o ON s.cust_id = o.cust_id AND o.paid_status = 0
             WHERE s.waiter_id = %s
             ORDER BY s.table_id
-            LIMIT 3
         """, (waiter['waiter_id'],))
         
         spots = cursor.fetchall()
@@ -543,8 +565,66 @@ def waiter_dashboard():
                     item['status_color'] = status_colors.get(item['order_status'], 'secondary')
                     spot['order_items'].append(item)
                 
-                # Check if all items are billed
-                spot['all_items_billed'] = spot['total_items'] == spot['billed_items'] and spot['total_items'] > 0
+                # Check if all items are delivered
+                spot['all_items_delivered'] = spot['total_items'] == spot['delivered_items'] and spot['total_items'] > 0
+        
+        # Check if there are any spots assigned to this waiter
+        if not spots:
+            # If no spots are assigned, assign up to 3 spots to this waiter
+            cursor.execute("""
+                UPDATE spots 
+                SET waiter_id = %s
+                WHERE waiter_id IS NULL
+                LIMIT 3
+            """, (waiter['waiter_id'],))
+            conn.commit()
+            
+            # Get the updated spots
+            cursor.execute("""
+                SELECT s.table_id, s.availability, s.cust_id, c.c_name, c.c_phone, c.loyal_pts,
+                       o.order_id, o.paid_status, o.bill_status,
+                       (SELECT COUNT(*) FROM order_details od WHERE od.order_id = o.order_id) as total_items,
+                       (SELECT COUNT(*) FROM order_details od WHERE od.order_id = o.order_id AND od.order_status = 'delivered') as delivered_items
+                FROM spots s
+                LEFT JOIN customer c ON s.cust_id = c.cust_id
+                LEFT JOIN orders o ON s.cust_id = o.cust_id AND o.paid_status = 0
+                WHERE s.waiter_id = %s
+                ORDER BY s.table_id
+            """, (waiter['waiter_id'],))
+            
+            spots = cursor.fetchall()
+            
+            # Process spots to add additional information
+            for spot in spots:
+                # Initialize order_items as an empty list
+                spot['order_items'] = []
+                
+                if spot['order_id']:
+                    # Get order items
+                    cursor.execute("""
+                        SELECT od.*, m.item_name, m.category, m.item_price
+                        FROM order_details od
+                        JOIN menu m ON od.item_id = m.item_id
+                        WHERE od.order_id = %s
+                    """, (spot['order_id'],))
+                    
+                    items = cursor.fetchall()
+                    
+                    # Process each item
+                    for item in items:
+                        # Add status color
+                        status_colors = {
+                            'placed': 'warning',
+                            'cooking': 'info',
+                            'cooked': 'success',
+                            'delivered': 'primary',
+                            'billed': 'secondary'
+                        }
+                        item['status_color'] = status_colors.get(item['order_status'], 'secondary')
+                        spot['order_items'].append(item)
+                    
+                    # Check if all items are delivered
+                    spot['all_items_delivered'] = spot['total_items'] == spot['delivered_items'] and spot['total_items'] > 0
         
         return render_template('waiter/dashboard.html', spots=spots)
     
@@ -552,9 +632,109 @@ def waiter_dashboard():
         import traceback
         print(f"Error in waiter_dashboard: {str(e)}")
         print(traceback.format_exc())
-        flash(f'An error occurred: {str(e)}', 'danger')
         return redirect(url_for('employee_login'))
     
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/waiter/approve_bill', methods=['POST'])
+def approve_bill():
+    if 'user_id' not in session or session.get('role') != 'waiter':
+        return jsonify({'error': 'Unauthorized'}), 401
+    
+    data = request.json
+    order_id = data.get('order_id')
+    
+    if not order_id:
+        return jsonify({'error': 'Missing order_id'}), 400
+    
+    conn = None
+    cursor = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+        
+        # Get waiter_id
+        cursor.execute("SELECT waiter_id FROM waiter WHERE emp_id = %s", (session['user_id'],))
+        waiter = cursor.fetchone()
+        
+        if not waiter:
+            return jsonify({'error': 'Waiter not found'}), 403
+        
+        # Verify the order belongs to a spot assigned to this waiter
+        cursor.execute("""
+            SELECT o.order_id, o.cust_id, s.table_id, s.waiter_id
+            FROM orders o
+            JOIN spots s ON o.cust_id = s.cust_id
+            WHERE o.order_id = %s AND s.waiter_id = %s AND o.bill_status = 'requested'
+        """, (order_id, waiter['waiter_id']))
+        
+        order_data = cursor.fetchone()
+        if not order_data:
+            return jsonify({'error': 'Order not found or not authorized'}), 403
+        
+        # Calculate total amount
+        cursor.execute("""
+            SELECT SUM(m.item_price * od.qty) as total
+            FROM order_details od
+            JOIN menu m ON od.item_id = m.item_id
+            WHERE od.order_id = %s
+        """, (order_id,))
+        
+        total_result = cursor.fetchone()
+        total = total_result['total'] if total_result['total'] else 0
+        
+        # Convert to Decimal for consistent calculations
+        total = Decimal(str(total))
+        tax = total * Decimal('0.18')  # 18% tax
+        final_amount = total + tax
+        
+        # Create bill
+        cursor.execute("""
+            INSERT INTO bill (tot_amt, tax, final_amt, pay_mode, order_id, waiter_id)
+            VALUES (%s, %s, %s, %s, %s, %s)
+        """, (float(total), float(tax), float(final_amount), 'online', order_id, waiter['waiter_id']))
+        
+        # Update order status to paid
+        cursor.execute("""
+            UPDATE orders 
+            SET paid_status = 1, bill_status = 'paid'
+            WHERE order_id = %s
+        """, (order_id,))
+        
+        # Update table availability
+        cursor.execute("""
+            UPDATE spots 
+            SET availability = 1, cust_id = NULL
+            WHERE table_id = %s
+        """, (order_data['table_id'],))
+        
+        # Calculate and update loyalty points (1 point per ₹10 spent)
+        points_earned = int(float(final_amount) / 10)
+        cursor.execute("""
+            UPDATE customer 
+            SET loyal_pts = loyal_pts + %s
+            WHERE cust_id = %s
+        """, (points_earned, order_data['cust_id']))
+        
+        conn.commit()
+        return jsonify({
+            'success': True,
+            'bill': {
+                'total': float(total),
+                'tax': float(tax),
+                'final_amount': float(final_amount),
+                'points_earned': points_earned
+            }
+        })
+        
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        return jsonify({'error': str(e)}), 500
     finally:
         if cursor:
             cursor.close()
@@ -640,7 +820,7 @@ def update_order_status():
 
 @app.route('/generate_bill', methods=['POST'])
 def generate_bill():
-    if 'user_id' not in session or session.get('role') != 'waiter':
+    if 'user_id' not in session or session.get('role') != 'customer':
         return jsonify({'error': 'Unauthorized'}), 401
     
     data = request.json
@@ -655,17 +835,16 @@ def generate_bill():
         conn = get_db_connection()
         cursor = conn.cursor(dictionary=True)
         
-        # Verify the order belongs to a spot assigned to this waiter
+        # Verify the order belongs to the current customer
         cursor.execute("""
-            SELECT s.waiter_id 
-            FROM spots s
-            JOIN orders o ON s.cust_id = o.cust_id
-            WHERE o.order_id = %s AND s.waiter_id = (
-                SELECT waiter_id FROM waiter WHERE emp_id = %s
-            )
+            SELECT o.order_id, o.cust_id, s.table_id, s.waiter_id
+            FROM orders o
+            JOIN spots s ON o.cust_id = s.cust_id
+            WHERE o.order_id = %s AND o.cust_id = %s AND o.paid_status = 0
         """, (order_id, session['user_id']))
         
-        if not cursor.fetchone():
+        order_data = cursor.fetchone()
+        if not order_data:
             return jsonify({'error': 'Order not found or not authorized'}), 403
         
         # Check if all items are delivered
@@ -680,22 +859,57 @@ def generate_bill():
         if result['total'] != result['delivered']:
             return jsonify({'error': 'All items must be delivered before generating bill'}), 400
         
-        # Update all items to billed status
+        # Calculate total amount
         cursor.execute("""
-            UPDATE order_details 
-            SET order_status = 'billed'
-            WHERE order_id = %s
+            SELECT SUM(m.item_price * od.qty) as total
+            FROM order_details od
+            JOIN menu m ON od.item_id = m.item_id
+            WHERE od.order_id = %s
         """, (order_id,))
         
-        # Update order paid status
+        total_result = cursor.fetchone()
+        total = total_result['total'] if total_result['total'] else 0
+        tax = total * 0.18  # 18% tax
+        final_amount = total + tax
+        
+        # Create bill
+        cursor.execute("""
+            INSERT INTO bill (tot_amt, tax, final_amt, pay_mode, order_id, waiter_id)
+            VALUES (%s, %s, %s, %s, %s, %s)
+        """, (total, tax, final_amount, 'online', order_id, order_data['waiter_id']))
+        
+        # Update order status to paid
         cursor.execute("""
             UPDATE orders 
             SET paid_status = 1
             WHERE order_id = %s
         """, (order_id,))
         
+        # Update table availability
+        cursor.execute("""
+            UPDATE spots 
+            SET availability = 1, cust_id = NULL
+            WHERE table_id = %s
+        """, (order_data['table_id'],))
+        
+        # Calculate and update loyalty points (1 point per ₹10 spent)
+        points_earned = int(final_amount / 10)
+        cursor.execute("""
+            UPDATE customer 
+            SET loyal_pts = loyal_pts + %s
+            WHERE cust_id = %s
+        """, (points_earned, session['user_id']))
+        
         conn.commit()
-        return jsonify({'success': True})
+        return jsonify({
+            'success': True,
+            'bill': {
+                'total': total,
+                'tax': tax,
+                'final_amount': final_amount,
+                'points_earned': points_earned
+            }
+        })
         
     except Exception as e:
         if conn:
