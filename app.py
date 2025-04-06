@@ -705,6 +705,13 @@ def approve_bill():
             WHERE order_id = %s
         """, (order_id,))
         
+        # Update all order items status to 'billed'
+        cursor.execute("""
+            UPDATE order_details 
+            SET order_status = 'billed'
+            WHERE order_id = %s
+        """, (order_id,))
+        
         # Update table availability
         cursor.execute("""
             UPDATE spots 
@@ -1273,6 +1280,70 @@ def waiter_spot_details(table_id):
         print(traceback.format_exc())
         flash(f'An error occurred: {str(e)}', 'danger')
         return redirect(url_for('waiter_dashboard'))
+    
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/customer/bill/<int:order_id>')
+def customer_bill(order_id):
+    if 'user_id' not in session or session.get('role') != 'customer':
+        return redirect(url_for('customer_login'))
+    
+    conn = None
+    cursor = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+        
+        # Verify the order belongs to the current customer
+        cursor.execute("""
+            SELECT o.order_id, o.cust_id, o.bill_status, s.table_id, s.waiter_id
+            FROM orders o
+            JOIN spots s ON o.cust_id = s.cust_id
+            WHERE o.order_id = %s AND o.cust_id = %s AND o.paid_status = 0
+        """, (order_id, session['user_id']))
+        
+        order_data = cursor.fetchone()
+        if not order_data:
+            flash('Order not found or not authorized', 'danger')
+            return redirect(url_for('customer_dashboard'))
+        
+        # Get order items
+        cursor.execute("""
+            SELECT od.*, m.item_name, m.item_price
+            FROM order_details od
+            JOIN menu m ON od.item_id = m.item_id
+            WHERE od.order_id = %s
+        """, (order_id,))
+        
+        items = cursor.fetchall()
+        
+        # Calculate totals
+        subtotal = sum(item['item_price'] * item['qty'] for item in items)
+        tax = subtotal * Decimal('0.18')  # 18% tax
+        total = subtotal + tax
+        
+        # Calculate loyalty points (1 point per ₹10 spent)
+        points_earned = int(float(total) / 10)
+        
+        # Check if bill has been requested
+        bill_requested = order_data['bill_status'] == 'requested'
+        
+        return render_template('customer/bill.html', 
+                              order=order_data,
+                              items=items,
+                              subtotal=subtotal,
+                              tax=tax,
+                              total=total,
+                              points_earned=points_earned,
+                              bill_requested=bill_requested)
+    
+    except Exception as e:
+        flash(f'An error occurred: {str(e)}', 'danger')
+        return redirect(url_for('customer_dashboard'))
     
     finally:
         if cursor:

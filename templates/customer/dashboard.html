@@ -67,9 +67,11 @@
                     </a>
                     
                     {% if current_order.all_delivered %}
-                    <button id="request-bill-btn" class="btn btn-success" data-order-id="{{ current_order.order_id }}">
-                        <i class="fas fa-file-invoice-dollar me-2"></i>Request Bill
-                    </button>
+                    <div class="d-grid gap-2 mt-3">
+                        <a href="{{ url_for('customer_bill', order_id=current_order.order_id) }}" class="btn btn-primary btn-lg">
+                            <i class="fas fa-file-invoice-dollar me-2"></i>Generate Bill
+                        </a>
+                    </div>
                     {% endif %}
                 </div>
                 {% else %}

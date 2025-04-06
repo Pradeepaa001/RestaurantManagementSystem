@@ -1,0 +1,128 @@
+{% extends "base.html" %}
+
+{% block title %}Bill Details - Restaurant RMS{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="row mb-4">
+        <div class="col-12">
+            <h2 class="text-center">
+                <i class="fas fa-file-invoice-dollar food-icon"></i>
+                Bill Details
+            </h2>
+            <p class="text-center text-muted">Order #{{ order.order_id }}</p>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-8 mx-auto">
+            <div class="card shadow-sm">
+                <div class="card-header bg-primary text-white">
+                    <h3 class="card-title mb-0">Order Summary</h3>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-striped">
+                            <thead>
+                                <tr>
+                                    <th>Item</th>
+                                    <th class="text-center">Quantity</th>
+                                    <th class="text-end">Price</th>
+                                    <th class="text-end">Total</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for item in items %}
+                                <tr>
+                                    <td>{{ item.item_name }}</td>
+                                    <td class="text-center">{{ item.qty }}</td>
+                                    <td class="text-end">₹{{ "%.2f"|format(item.item_price) }}</td>
+                                    <td class="text-end">₹{{ "%.2f"|format(item.item_price * item.qty) }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                            <tfoot>
+                                <tr>
+                                    <td colspan="3" class="text-end"><strong>Subtotal:</strong></td>
+                                    <td class="text-end">₹{{ "%.2f"|format(subtotal) }}</td>
+                                </tr>
+                                <tr>
+                                    <td colspan="3" class="text-end"><strong>Tax (18%):</strong></td>
+                                    <td class="text-end">₹{{ "%.2f"|format(tax) }}</td>
+                                </tr>
+                                <tr class="table-primary">
+                                    <td colspan="3" class="text-end"><strong>Total:</strong></td>
+                                    <td class="text-end"><strong>₹{{ "%.2f"|format(total) }}</strong></td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+
+                    <div class="alert alert-info mt-3">
+                        <i class="fas fa-star me-2"></i>
+                        You will earn <strong>{{ points_earned }}</strong> loyalty points after payment.
+                    </div>
+
+                    {% if bill_requested %}
+                    <div class="alert alert-warning mt-3">
+                        <i class="fas fa-clock me-2"></i>
+                        Your bill request has been sent to the waiter. They will process it shortly.
+                    </div>
+                    {% else %}
+                    <div class="d-grid gap-2 mt-3">
+                        <button id="request-bill-btn" class="btn btn-primary btn-lg">
+                            <i class="fas fa-file-invoice-dollar me-2"></i>Request Bill
+                        </button>
+                    </div>
+                    {% endif %}
+                </div>
+                <div class="card-footer bg-light">
+                    <div class="d-flex justify-content-between">
+                        <a href="{{ url_for('customer_dashboard') }}" class="btn btn-outline-secondary">
+                            <i class="fas fa-arrow-left me-2"></i>Back to Dashboard
+                        </a>
+                        <a href="{{ url_for('menu') }}" class="btn btn-outline-primary">
+                            <i class="fas fa-utensils me-2"></i>Order More
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Request bill
+    const requestBillBtn = document.getElementById('request-bill-btn');
+    if (requestBillBtn) {
+        requestBillBtn.addEventListener('click', function() {
+            if (confirm('Are you sure you want to request the bill? This will notify your waiter.')) {
+                fetch('/request_bill', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ order_id: {{ order.order_id }} })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        alert('Bill request sent to your waiter. They will process it shortly.');
+                        location.reload();
+                    } else {
+                        alert('Error requesting bill: ' + data.error);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('An error occurred while requesting the bill.');
+                });
+            }
+        });
+    }
+});
+</script>
+{% endblock %} 
