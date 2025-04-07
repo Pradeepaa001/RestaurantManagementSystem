@@ -1,0 +1,280 @@
+{% extends "base.html" %}
+
+{% block title %}Menu - Restaurant RMS{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="row mb-4">
+        <div class="col-12">
+            <h2 class="text-center">
+                <i class="fas fa-utensils food-icon"></i>
+                Our Menu
+            </h2>
+        </div>
+    </div>
+
+    <!-- Cart Button -->
+    <div class="position-fixed bottom-0 end-0 m-4">
+        <button type="button" class="btn btn-primary btn-lg rounded-circle" data-bs-toggle="modal" data-bs-target="#cartModal">
+            <i class="fas fa-shopping-cart"></i>
+            <span class="badge bg-danger cart-count">0</span>
+        </button>
+    </div>
+
+    <!-- Menu Categories -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="btn-group" role="group">
+                <button type="button" class="btn btn-outline-primary active" data-category="all">All</button>
+                {% for category in categories %}
+                <button type="button" class="btn btn-outline-primary" data-category="{{ category }}">{{ category }}</button>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Menu Items -->
+    <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4">
+        {% for item in menu_items %}
+        <div class="col menu-item" data-category="{{ item.category }}">
+            <div class="card h-100">
+                {% if item.image_url %}
+                <img src="{{ item.image_url }}" class="card-img-top" alt="{{ item.item_name }}">
+                {% else %}
+                <img src="/static/images/default-food.jpeg" class="card-img-top" alt="{{ item.item_name }}">
+                {% endif %}
+                <div class="card-body">
+                    <h5 class="card-title">{{ item.item_name }}</h5>
+                    <p class="card-text">
+                        <small class="text-muted">{{ item.category }}</small>
+                    </p>
+                    <p class="card-text">
+                        <strong>₹{{ "%.2f"|format(item.item_price) }}</strong>
+                    </p>
+                    {% if item.allergen %}
+                    <p class="card-text">
+                        <small class="text-danger">
+                            <i class="fas fa-exclamation-circle"></i>
+                            Contains: {{ item.allergen }}
+                        </small>
+                    </p>
+                    {% endif %}
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div class="btn-group">
+                            <button type="button" class="btn btn-sm btn-outline-secondary decrement-qty" 
+                                    data-item-id="{{ item.item_id }}" disabled>-</button>
+                            <span class="btn btn-sm btn-outline-secondary item-qty" 
+                                  data-item-id="{{ item.item_id }}">0</span>
+                            <button type="button" class="btn btn-sm btn-outline-secondary increment-qty" 
+                                    data-item-id="{{ item.item_id }}">+</button>
+                        </div>
+                        {% if item.rating %}
+                        <small class="text-muted">
+                            <i class="fas fa-star text-warning"></i>
+                            {{ "%.1f"|format(item.rating) }}
+                        </small>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- Cart Modal -->
+    <div class="modal fade" id="cartModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Your Cart</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="cartItems">
+                        <!-- Cart items will be inserted here -->
+                    </div>
+                    <div class="text-end mt-3">
+                        <strong>Total: ₹<span id="cartTotal">0.00</span></strong>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    <button type="button" class="btn btn-primary" id="placeOrderBtn">Place Order</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Initialize cart
+    let cart = {};
+    let menuItems = {{ menu_items|tojson|safe }};
+    
+    // Category filter buttons
+    document.querySelectorAll('[data-category]').forEach(button => {
+        button.addEventListener('click', function() {
+            // Remove active class from all buttons
+            document.querySelectorAll('[data-category]').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            
+            // Add active class to clicked button
+            this.classList.add('active');
+            
+            const category = this.dataset.category;
+            
+            // Show/hide menu items based on category
+            document.querySelectorAll('.menu-item').forEach(item => {
+                if (category === 'all' || item.dataset.category === category) {
+                    item.style.display = '';
+                } else {
+                    item.style.display = 'none';
+                }
+            });
+        });
+    });
+
+    // Quantity increment buttons
+    document.querySelectorAll('.increment-qty').forEach(button => {
+        button.addEventListener('click', function() {
+            const itemId = this.dataset.itemId;
+            const qtyElement = document.querySelector(`.item-qty[data-item-id="${itemId}"]`);
+            const decrementBtn = document.querySelector(`.decrement-qty[data-item-id="${itemId}"]`);
+            
+            let qty = parseInt(qtyElement.textContent);
+            qty++;
+            qtyElement.textContent = qty;
+            
+            // Enable decrement button
+            decrementBtn.disabled = false;
+            
+            // Update cart
+            cart[itemId] = qty;
+            updateCartCount();
+        });
+    });
+
+    // Quantity decrement buttons
+    document.querySelectorAll('.decrement-qty').forEach(button => {
+        button.addEventListener('click', function() {
+            const itemId = this.dataset.itemId;
+            const qtyElement = document.querySelector(`.item-qty[data-item-id="${itemId}"]`);
+            
+            let qty = parseInt(qtyElement.textContent);
+            if (qty > 0) {
+                qty--;
+                qtyElement.textContent = qty;
+                
+                // Disable decrement button if qty is 0
+                if (qty === 0) {
+                    this.disabled = true;
+                    delete cart[itemId];
+                } else {
+                    cart[itemId] = qty;
+                }
+                
+                updateCartCount();
+            }
+        });
+    });
+
+    // Update cart count
+    function updateCartCount() {
+        const count = Object.values(cart).reduce((a, b) => a + b, 0);
+        document.querySelector('.cart-count').textContent = count;
+    }
+
+    // Update cart modal
+    document.getElementById('cartModal').addEventListener('show.bs.modal', function() {
+        const cartItems = document.getElementById('cartItems');
+        const cartTotal = document.getElementById('cartTotal');
+        let total = 0;
+        
+        // Clear previous items
+        cartItems.innerHTML = '';
+        
+        // Add current items
+        for (const [itemId, qty] of Object.entries(cart)) {
+            const item = menuItems.find(item => item.item_id == itemId);
+            if (item) {
+                const itemTotal = item.item_price * qty;
+                total += itemTotal;
+                
+                cartItems.innerHTML += `
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <div>
+                            <strong>${item.item_name}</strong> × ${qty}
+                        </div>
+                        <div>
+                            ₹${itemTotal.toFixed(2)}
+                        </div>
+                    </div>
+                `;
+            }
+        }
+        
+        // Update total
+        cartTotal.textContent = total.toFixed(2);
+    });
+
+    // Place order button
+    document.getElementById('placeOrderBtn').addEventListener('click', function() {
+        // Convert cart object to array of items
+        const items = Object.entries(cart).map(([id, quantity]) => ({
+            id: parseInt(id),
+            quantity: quantity
+        }));
+        
+        if (items.length === 0) {
+            alert('Please add items to your cart before placing an order.');
+            return;
+        }
+        
+        // Send order to server
+        fetch('/place_order_simple', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ items: items })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // Clear cart
+                cart = {};
+                updateCartCount();
+                
+                // Close modal
+                const modal = bootstrap.Modal.getInstance(document.getElementById('cartModal'));
+                modal.hide();
+                
+                // Show success message
+                alert('Order placed successfully!');
+                
+                // Reset all quantity displays
+                document.querySelectorAll('.item-qty').forEach(element => {
+                    element.textContent = '0';
+                });
+                document.querySelectorAll('.decrement-qty').forEach(button => {
+                    button.disabled = true;
+                });
+                
+                // Redirect to dashboard
+                window.location.href = '/customer/dashboard';
+            } else {
+                alert('Error placing order: ' + data.error);
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('An error occurred while placing your order.');
+        });
+    });
+});
+</script>
+{% endblock %} 

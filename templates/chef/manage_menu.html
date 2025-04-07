@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Chef Dashboard - Restaurant RMS{% endblock %}
+{% block title %}Manage Menu - Chef Dashboard{% endblock %}
 
 {% block content %}
 <div class="container py-4">
@@ -8,7 +8,7 @@
         <div class="col-12">
             <h2 class="text-center">
                 <i class="fas fa-utensils food-icon"></i>
-                Chef Dashboard
+                Manage Menu
             </h2>
         </div>
     </div>
@@ -17,9 +17,9 @@
         <div class="col-12">
             <div class="card shadow-sm">
                 <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
-                    <h3 class="card-title mb-0">Assigned Orders</h3>
-                    <a href="{{ url_for('chef_manage_menu') }}" class="btn btn-light">
-                        <i class="fas fa-edit me-2"></i>Edit Menu
+                    <h3 class="card-title mb-0">Menu Items</h3>
+                    <a href="{{ url_for('chef_dashboard') }}" class="btn btn-light">
+                        <i class="fas fa-arrow-left me-2"></i>Back to Dashboard
                     </a>
                 </div>
                 <div class="card-body">
@@ -27,41 +27,38 @@
                         <table class="table table-hover">
                             <thead>
                                 <tr>
-                                    <th>Order ID</th>
-                                    <th>Item Name</th>
+                                    <th>ID</th>
+                                    <th>Name</th>
                                     <th>Category</th>
-                                    <th>Quantity</th>
+                                    <th>Price</th>
+                                    <th>Prep Time</th>
                                     <th>Status</th>
                                     <th>Actions</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                {% for order in assigned_orders %}
+                                {% for item in menu_items %}
                                 <tr>
-                                    <td>{{ order.order_id }}</td>
-                                    <td>{{ order.item_name }}</td>
+                                    <td>{{ item.item_id }}</td>
+                                    <td>{{ item.item_name }}</td>
                                     <td>
-                                        <span class="badge bg-info">{{ order.category }}</span>
+                                        <span class="badge bg-info">{{ item.category }}</span>
                                     </td>
-                                    <td>{{ order.qty }}</td>
+                                    <td>₹{{ item.item_price }}</td>
+                                    <td>{{ item.prep_time }} mins</td>
                                     <td>
-                                        <span class="badge bg-{{ 'warning' if order.order_status == 'placed' else 'success' }}">
-                                            {{ order.order_status|title }}
+                                        <span class="badge bg-{{ 'success' if item.availability else 'danger' }}">
+                                            {{ 'Available' if item.availability else 'Unavailable' }}
                                         </span>
                                     </td>
                                     <td>
-                                        {% if order.order_status == 'placed' %}
-                                        <button class="btn btn-sm btn-success mark-cooked" 
-                                                data-order-id="{{ order.order_id }}"
-                                                data-item-id="{{ order.item_id }}">
-                                            <i class="fas fa-check me-1"></i>Mark as Cooked
+                                        <button class="btn btn-sm btn-{{ 'danger' if item.availability else 'success' }} toggle-availability"
+                                                data-item-id="{{ item.item_id }}"
+                                                data-current-status="{{ item.availability }}">
+                                            <i class="fas fa-{{ 'times' if item.availability else 'check' }}"></i>
+                                            {{ 'Disable' if item.availability else 'Enable' }}
                                         </button>
-                                        {% endif %}
                                     </td>
-                                </tr>
-                                {% else %}
-                                <tr>
-                                    <td colspan="6" class="text-center">No orders assigned</td>
                                 </tr>
                                 {% endfor %}
                             </tbody>
@@ -77,20 +74,19 @@
 {% block extra_js %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // Handle marking items as cooked
-    document.querySelectorAll('.mark-cooked').forEach(button => {
+    // Handle toggling item availability
+    document.querySelectorAll('.toggle-availability').forEach(button => {
         button.addEventListener('click', function() {
-            const orderId = this.dataset.orderId;
             const itemId = this.dataset.itemId;
+            const currentStatus = this.dataset.currentStatus === 'True';
             
-            if (confirm('Are you sure you want to mark this item as cooked?')) {
-                fetch('/chef/mark_cooked', {
+            if (confirm(`Are you sure you want to ${currentStatus ? 'disable' : 'enable'} this item?`)) {
+                fetch('/chef/toggle_menu_item', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
                     },
                     body: JSON.stringify({
-                        order_id: orderId,
                         item_id: itemId
                     })
                 })
@@ -99,12 +95,12 @@ document.addEventListener('DOMContentLoaded', function() {
                     if (data.success) {
                         location.reload();
                     } else {
-                        alert('Error updating order status: ' + data.error);
+                        alert('Error updating item availability: ' + data.error);
                     }
                 })
                 .catch(error => {
                     console.error('Error:', error);
-                    alert('An error occurred while updating the order status.');
+                    alert('An error occurred while updating item availability.');
                 });
             }
         });

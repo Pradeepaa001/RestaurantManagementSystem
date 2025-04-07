@@ -639,140 +639,6 @@ def waiter_dashboard():
             cursor.close()
         if conn:
             conn.close()
-
-@app.route('/waiter/approve_bill', methods=['POST'])
-def approve_bill():
-    if 'user_id' not in session or session.get('role') != 'waiter':
-        return jsonify({'error': 'Unauthorized'}), 401
-    
-    data = request.json
-    order_id = data.get('order_id')
-    
-    if not order_id:
-        return jsonify({'error': 'Missing order_id'}), 400
-    
-    conn = None
-    cursor = None
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor(dictionary=True)
-        
-        # Get waiter_id
-        cursor.execute("SELECT waiter_id FROM waiter WHERE emp_id = %s", (session['user_id'],))
-        waiter = cursor.fetchone()
-        
-        if not waiter:
-            return jsonify({'error': 'Waiter not found'}), 403
-        
-        # Verify the order belongs to a spot assigned to this waiter
-        cursor.execute("""
-            SELECT o.order_id, o.cust_id, s.table_id, s.waiter_id
-            FROM orders o
-            JOIN spots s ON o.cust_id = s.cust_id
-            WHERE o.order_id = %s AND s.waiter_id = %s AND o.bill_status = 'requested'
-        """, (order_id, waiter['waiter_id']))
-        
-        order_data = cursor.fetchone()
-        if not order_data:
-            return jsonify({'error': 'Order not found or not authorized'}), 403
-        
-        # Calculate total amount
-        cursor.execute("""
-            SELECT SUM(m.item_price * od.qty) as total
-            FROM order_details od
-            JOIN menu m ON od.item_id = m.item_id
-            WHERE od.order_id = %s
-        """, (order_id,))
-        
-        total_result = cursor.fetchone()
-        total = total_result['total'] if total_result['total'] else 0
-        
-        # Convert to Decimal for consistent calculations
-        total = Decimal(str(total))
-        tax = total * Decimal('0.18')  # 18% tax
-        final_amount = total + tax
-        
-        # Create bill
-        cursor.execute("""
-            INSERT INTO bill (tot_amt, tax, final_amt, pay_mode, order_id, waiter_id)
-            VALUES (%s, %s, %s, %s, %s, %s)
-        """, (float(total), float(tax), float(final_amount), 'online', order_id, waiter['waiter_id']))
-        
-        # Update order status to paid
-        cursor.execute("""
-            UPDATE orders 
-            SET paid_status = 1, bill_status = 'paid'
-            WHERE order_id = %s
-        """, (order_id,))
-        
-        # Update all order items status to 'billed'
-        cursor.execute("""
-            UPDATE order_details 
-            SET order_status = 'billed'
-            WHERE order_id = %s
-        """, (order_id,))
-        
-        # Update table availability
-        cursor.execute("""
-            UPDATE spots 
-            SET availability = 1, cust_id = NULL
-            WHERE table_id = %s
-        """, (order_data['table_id'],))
-        
-        # Calculate and update loyalty points (1 point per ₹10 spent)
-        points_earned = int(float(final_amount) / 10)
-        cursor.execute("""
-            UPDATE customer 
-            SET loyal_pts = loyal_pts + %s
-            WHERE cust_id = %s
-        """, (points_earned, order_data['cust_id']))
-        
-        conn.commit()
-        return jsonify({
-            'success': True,
-            'bill': {
-                'total': float(total),
-                'tax': float(tax),
-                'final_amount': float(final_amount),
-                'points_earned': points_earned
-            }
-        })
-        
-    except Exception as e:
-        if conn:
-            conn.rollback()
-        return jsonify({'error': str(e)}), 500
-    finally:
-        if cursor:
-            cursor.close()
-        if conn:
-            conn.close()
-
-@app.route('/chef/dashboard')
-def chef_dashboard():
-    if 'user_id' not in session or session['role'] != 'chef':
-        return redirect(url_for('login'))
-    
-    conn = get_db_connection()
-    cursor = conn.cursor(dictionary=True)
-    
-    # Get all pending orders
-    cursor.execute('''
-        SELECT od.*, m.item_name, m.prep_time, c.c_name
-        FROM order_details od
-        JOIN menu m ON od.item_id = m.item_id
-        JOIN orders o ON od.order_id = o.order_id
-        JOIN customer c ON o.cust_id = c.cust_id
-        WHERE od.order_status IN ('placed', 'cooking')
-    ''')
-    
-    orders = cursor.fetchall()
-    
-    cursor.close()
-    conn.close()
-    
-    return render_template('chef/dashboard.html', orders=orders)
-
 @app.route('/update_order_status', methods=['POST'])
 def update_order_status():
     if 'user_id' not in session or session.get('role') != 'waiter':
@@ -928,11 +794,277 @@ def generate_bill():
         if conn:
             conn.close()
 
-@app.route('/logout')
-def logout():
-    session.clear()
-    flash('You have been successfully logged out!', 'success')
-    return redirect(url_for('index'))
+# @app.route('/logout')
+# def logout():
+#     session.clear()
+#     flash('You have been successfully logged out!', 'success')
+#     return redirect(url_for('index'))
+
+@app.route('/waiter/approve_bill', methods=['POST'])
+def approve_bill():
+    if 'user_id' not in session or session.get('role') != 'waiter':
+        return jsonify({'error': 'Unauthorized'}), 401
+    
+    data = request.json
+    order_id = data.get('order_id')
+    
+    if not order_id:
+        return jsonify({'error': 'Missing order_id'}), 400
+    
+    conn = None
+    cursor = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+        
+        # Get waiter_id
+        cursor.execute("SELECT waiter_id FROM waiter WHERE emp_id = %s", (session['user_id'],))
+        waiter = cursor.fetchone()
+        
+        if not waiter:
+            return jsonify({'error': 'Waiter not found'}), 403
+        
+        # Verify the order belongs to a spot assigned to this waiter
+        cursor.execute("""
+            SELECT o.order_id, o.cust_id, s.table_id, s.waiter_id
+            FROM orders o
+            JOIN spots s ON o.cust_id = s.cust_id
+            WHERE o.order_id = %s AND s.waiter_id = %s AND o.bill_status = 'requested'
+        """, (order_id, waiter['waiter_id']))
+        
+        order_data = cursor.fetchone()
+        if not order_data:
+            return jsonify({'error': 'Order not found or not authorized'}), 403
+        
+        # Calculate total amount
+        cursor.execute("""
+            SELECT SUM(m.item_price * od.qty) as total
+            FROM order_details od
+            JOIN menu m ON od.item_id = m.item_id
+            WHERE od.order_id = %s
+        """, (order_id,))
+        
+        total_result = cursor.fetchone()
+        total = total_result['total'] if total_result['total'] else 0
+        
+        # Convert to Decimal for consistent calculations
+        total = Decimal(str(total))
+        tax = total * Decimal('0.18')  # 18% tax
+        final_amount = total + tax
+        
+        # Create bill
+        cursor.execute("""
+            INSERT INTO bill (tot_amt, tax, final_amt, pay_mode, order_id, waiter_id)
+            VALUES (%s, %s, %s, %s, %s, %s)
+        """, (float(total), float(tax), float(final_amount), 'online', order_id, waiter['waiter_id']))
+        
+        # Update order status to paid
+        cursor.execute("""
+            UPDATE orders 
+            SET paid_status = 1, bill_status = 'paid'
+            WHERE order_id = %s
+        """, (order_id,))
+        
+        # Update all order items status to 'billed'
+        cursor.execute("""
+            UPDATE order_details 
+            SET order_status = 'billed'
+            WHERE order_id = %s
+        """, (order_id,))
+        
+        # Update table availability
+        cursor.execute("""
+            UPDATE spots 
+            SET availability = 1, cust_id = NULL
+            WHERE table_id = %s
+        """, (order_data['table_id'],))
+        
+        # Calculate and update loyalty points (1 point per ₹10 spent)
+        points_earned = int(float(final_amount) / 10)
+        cursor.execute("""
+            UPDATE customer 
+            SET loyal_pts = loyal_pts + %s
+            WHERE cust_id = %s
+        """, (points_earned, order_data['cust_id']))
+        
+        conn.commit()
+        return jsonify({
+            'success': True,
+            'bill': {
+                'total': float(total),
+                'tax': float(tax),
+                'final_amount': float(final_amount),
+                'points_earned': points_earned
+            }
+        })
+        
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/chef/dashboard')
+def chef_dashboard():
+    if 'user_id' not in session or session.get('role') != 'chef':
+        flash('Please login as chef to access this page.', 'error')
+        return redirect(url_for('employee_login'))
+    
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+        
+        # Get chef_id for the logged-in chef
+        cursor.execute("""
+            SELECT chef_id 
+            FROM chef 
+            WHERE emp_id = %s
+        """, (session['user_id'],))
+        chef = cursor.fetchone()
+        
+        if not chef:
+            flash('Chef profile not found.', 'error')
+            return redirect(url_for('employee_login'))
+        
+        # Get assigned orders for this chef
+        cursor.execute("""
+            SELECT od.order_id, od.item_id, od.qty, od.order_status,
+                   m.item_name, m.category, m.prep_time
+            FROM order_details od
+            JOIN menu m ON od.item_id = m.item_id
+            WHERE od.chef_id = %s
+            AND od.order_status IN ('placed', 'cooking')
+            ORDER BY od.order_id
+        """, (chef['chef_id'],))
+        
+        assigned_orders = cursor.fetchall()
+        cursor.close()
+        conn.close()
+        
+        return render_template('chef/dashboard.html', assigned_orders=assigned_orders)
+        
+    except Exception as e:
+        print(f"Error in chef_dashboard: {str(e)}")
+        flash('Error retrieving assigned orders. Please try again.', 'error')
+        return redirect(url_for('employee_login'))
+
+@app.route('/chef/manage_menu')
+def chef_manage_menu():
+    if 'user_id' not in session or session.get('role') != 'chef':
+        flash('Please login as chef to access this page.', 'error')
+        return redirect(url_for('employee_login'))
+    
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+        
+        # Get all menu items
+        cursor.execute("""
+            SELECT item_id, item_name, category, item_price, prep_time, availability
+            FROM menu
+            ORDER BY category, item_name
+        """)
+        
+        menu_items = cursor.fetchall()
+        cursor.close()
+        conn.close()
+        
+        return render_template('chef/manage_menu.html', menu_items=menu_items)
+        
+    except Exception as e:
+        print(f"Error in chef_manage_menu: {str(e)}")
+        flash('Error retrieving menu items. Please try again.', 'error')
+        return redirect(url_for('chef_dashboard'))
+
+@app.route('/chef/mark_cooked', methods=['POST'])
+def chef_mark_cooked():
+    if 'user_id' not in session or session.get('role') != 'chef':
+        return jsonify({'success': False, 'error': 'Unauthorized access'})
+    
+    try:
+        data = request.get_json()
+        order_id = data.get('order_id')
+        item_id = data.get('item_id')
+        
+        if not order_id or not item_id:
+            return jsonify({'success': False, 'error': 'Missing required parameters'})
+        
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+        
+        # Get chef_id for the logged-in chef
+        cursor.execute("""
+            SELECT chef_id 
+            FROM chef 
+            WHERE emp_id = %s
+        """, (session['user_id'],))
+        chef = cursor.fetchone()
+        
+        if not chef:
+            return jsonify({'success': False, 'error': 'Chef not found'})
+        
+        # Update order status to cooked
+        cursor.execute("""
+            UPDATE order_details 
+            SET order_status = 'cooked'
+            WHERE order_id = %s AND item_id = %s AND chef_id = %s
+        """, (order_id, item_id, chef['chef_id']))
+        
+        conn.commit()
+        cursor.close()
+        conn.close()
+        
+        return jsonify({'success': True})
+        
+    except Exception as e:
+        print(f"Error in chef_mark_cooked: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/chef/toggle_menu_item', methods=['POST'])
+def chef_toggle_menu_item():
+    if 'user_id' not in session or session.get('role') != 'chef':
+        return jsonify({'success': False, 'error': 'Unauthorized access'})
+    
+    try:
+        data = request.get_json()
+        item_id = data.get('item_id')
+        
+        if not item_id:
+            return jsonify({'success': False, 'error': 'Missing item ID'})
+        
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+        
+        # Get current availability
+        cursor.execute("SELECT availability FROM menu WHERE item_id = %s", (item_id,))
+        current = cursor.fetchone()
+        
+        if not current:
+            cursor.close()
+            conn.close()
+            return jsonify({'success': False, 'error': 'Item not found'})
+        
+        # Toggle availability
+        new_status = not current['availability']
+        cursor.execute("""
+            UPDATE menu 
+            SET availability = %s 
+            WHERE item_id = %s
+        """, (new_status, item_id))
+        
+        conn.commit()
+        cursor.close()
+        conn.close()
+        
+        return jsonify({'success': True})
+        
+    except Exception as e:
+        print(f"Error in chef_toggle_menu_item: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)})
 
 @app.route('/admin/dashboard')
 def admin_dashboard():
@@ -1002,11 +1134,19 @@ def admin_add_employee():
                 VALUES (%s, %s, %s, %s, %s)
             ''', (name, phone, role, password, salary))
             
+            # Get the newly inserted employee's ID
+            emp_id = cursor.lastrowid
+            
             # If role is waiter, add to waiter table
             if role == 'waiter':
-                cursor.execute('SELECT emp_id FROM employee WHERE e_phone = %s', (phone,))
-                emp_id = cursor.fetchone()[0]
                 cursor.execute('INSERT INTO waiter (emp_id) VALUES (%s)', (emp_id,))
+                print(f"Added waiter entry for employee {emp_id}")
+            
+            # If role is chef, add to chef table
+            elif role == 'chef':
+                cursor.execute('INSERT INTO chef (emp_id, specialization) VALUES (%s, %s)', 
+                             (emp_id, 'General'))  # Default specialization
+                print(f"Added chef entry for employee {emp_id}")
             
             conn.commit()
             flash('Employee added successfully!', 'success')
@@ -1106,7 +1246,7 @@ def admin_toggle_menu_item():
 def admin_edit_menu_item(item_id):
     if not session.get('user_id') or session.get('role') != 'admin':
         flash('Please login as admin to access this page.', 'error')
-        return redirect(url_for('login'))
+        return redirect(url_for('employee_login'))
     
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
@@ -1149,7 +1289,7 @@ def admin_edit_menu_item(item_id):
 def admin_reports():
     if not session.get('user_id') or session.get('role') != 'admin':
         flash('Please login as admin to access this page.', 'error')
-        return redirect(url_for('login'))
+        return redirect(url_for('employee_login'))
     
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
@@ -1242,7 +1382,7 @@ def admin_settings():
 def admin_update_loyalty_settings():
     if not session.get('user_id') or session.get('role') != 'admin':
         flash('Please login as admin to access this page.', 'error')
-        return redirect(url_for('login'))
+        return redirect(url_for('employee_login'))
     
     points_per_rupee = float(request.form.get('points_per_rupee'))
     rupee_per_point = float(request.form.get('rupee_per_point'))
@@ -1271,7 +1411,7 @@ def admin_update_loyalty_settings():
 def admin_update_tax_settings():
     if not session.get('user_id') or session.get('role') != 'admin':
         flash('Please login as admin to access this page.', 'error')
-        return redirect(url_for('login'))
+        return redirect(url_for('employee_login'))
     
     tax_rate = float(request.form.get('tax_rate'))
     
@@ -1295,7 +1435,7 @@ def admin_update_tax_settings():
 def admin_update_table_settings():
     if not session.get('user_id') or session.get('role') != 'admin':
         flash('Please login as admin to access this page.', 'error')
-        return redirect(url_for('login'))
+        return redirect(url_for('employee_login'))
     
     total_tables = int(request.form.get('total_tables'))
     
@@ -1319,7 +1459,7 @@ def admin_update_table_settings():
 def admin_update_system_settings():
     if not session.get('user_id') or session.get('role') != 'admin':
         flash('Please login as admin to access this page.', 'error')
-        return redirect(url_for('login'))
+        return redirect(url_for('employee_login'))
     
     restaurant_name = request.form.get('restaurant_name')
     restaurant_address = request.form.get('restaurant_address')
@@ -1450,6 +1590,7 @@ def place_order_new():
                     SET qty = %s 
                     WHERE order_id = %s AND item_id = %s
                 ''', (item['quantity'], order_id, item['id']))
+                cursor.close()
                 print(f"Updated item {item['id']} in order {order_id}")
             else:
                 # Add new item to order
@@ -1457,7 +1598,7 @@ def place_order_new():
                     INSERT INTO order_details (order_id, item_id, qty, order_status)
                     VALUES (%s, %s, %s, 'placed')
                 ''', (order_id, item['id'], item['quantity']))
-                print(f"Added item {item['id']} to order {order_id}")
+                cursor.close()
         
         # Commit the transaction
         conn.commit()
@@ -1506,8 +1647,16 @@ def place_order_final():
         if not conn:
             return jsonify({'error': 'Database connection failed'}), 500
         
-        # First, check if customer has an unpaid order
         cursor = conn.cursor(dictionary=True)
+        
+        # Get total number of chefs
+        cursor.execute("SELECT COUNT(*) as chef_count FROM chef")
+        chef_count = cursor.fetchone()['chef_count']
+        
+        if chef_count == 0:
+            return jsonify({'error': 'No chefs available in the system'}), 500
+        
+        # First, check if customer has an unpaid order
         cursor.execute('''
             SELECT order_id FROM orders 
             WHERE cust_id = %s AND paid_status = FALSE
@@ -1541,12 +1690,24 @@ def place_order_final():
                 ''', (item['quantity'], order_id, item['id']))
                 print(f"Updated item {item['id']} in order {order_id}")
             else:
-                # Add new item to order
+                # Get chef_id based on order_id and total chefs (round-robin assignment)
+                chef_position = (order_id % chef_count) + 1
+                cursor.execute("""
+                    SELECT chef_id
+                    FROM chef
+                    LIMIT 1 OFFSET %s
+                """, (chef_position - 1,))
+                chef = cursor.fetchone()
+                
+                if not chef:
+                    return jsonify({'error': 'Could not assign chef to order'}), 500
+                
+                # Add new item to order with chef assignment
                 cursor.execute('''
-                    INSERT INTO order_details (order_id, item_id, qty, order_status)
-                    VALUES (%s, %s, %s, 'placed')
-                ''', (order_id, item['id'], item['quantity']))
-                print(f"Added item {item['id']} to order {order_id}")
+                    INSERT INTO order_details (order_id, item_id, qty, order_status, chef_id)
+                    VALUES (%s, %s, %s, 'placed', %s)
+                ''', (order_id, item['id'], item['quantity'], chef['chef_id']))
+                print(f"Added item {item['id']} to order {order_id} with chef {chef['chef_id']}")
         
         return jsonify({'success': True, 'order_id': order_id})
     except Error as e:
@@ -1727,7 +1888,7 @@ def customer_bill(order_id):
 def admin_employee_details():
     if 'user_id' not in session or session.get('role') != 'admin':
         flash('Please login as admin to access this page.', 'error')
-        return redirect(url_for('login'))
+        return redirect(url_for('employee_login'))
     
     try:
         conn = get_db_connection()
@@ -1795,6 +1956,12 @@ def admin_toggle_employee_status():
     except Exception as e:
         print(f"Error in toggle_employee_status: {str(e)}")  # Add logging
         return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/logout')
+def logout():
+    session.clear()
+    flash('You have been successfully logged out!', 'success')
+    return redirect(url_for('index'))
 
 if __name__ == '__main__':
     app.run(debug=True) 

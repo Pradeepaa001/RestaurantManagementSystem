@@ -23,7 +23,7 @@
                     {% endif %}
                 {% endwith %}
 
-                <form method="POST" action="{{ url_for('login') }}" id="loginForm">
+                <form method="POST" id="loginForm">
                     <div class="mb-4">
                         <label class="form-label">Login as:</label>
                         <div class="d-flex justify-content-center gap-3">
@@ -98,14 +98,13 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
+    // Set the form action based on the selected role
     loginForm.addEventListener('submit', function(e) {
         const role = roleInput.value;
-        const phone = document.getElementById('phone').value;
-        const password = passwordInput.value;
-
-        if (role === 'employee' && !password) {
-            e.preventDefault();
-            alert('Please enter your password');
+        if (role === 'employee') {
+            this.action = "{{ url_for('employee_login') }}";
+        } else {
+            this.action = "{{ url_for('customer_login') }}";
         }
     });
 });
