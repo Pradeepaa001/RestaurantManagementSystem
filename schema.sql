@@ -38,7 +38,7 @@ CREATE TABLE IF NOT EXISTS waiter (
 
 -- Spots table (renamed from tables)
 CREATE TABLE IF NOT EXISTS spots (
-    spot_id INT PRIMARY KEY AUTO_INCREMENT,
+    table_id INT PRIMARY KEY AUTO_INCREMENT,
     availability BOOLEAN DEFAULT TRUE,
     QR_code VARCHAR(255) UNIQUE NOT NULL,
     cust_id INT,
@@ -114,7 +114,8 @@ INSERT INTO waiter (emp_id) VALUES
 
 INSERT INTO spots (QR_code, waiter_id) VALUES
 ('spot1_qr', 1),
-('spot2_qr', 1);
+('spot2_qr', 1),
+('spot3_qr', 1);
 
 -- Insert sample menu items
 INSERT INTO menu (item_name, allergen, rating, category, item_price, prep_time, image_url) VALUES
@@ -130,7 +131,10 @@ INSERT INTO menu (item_name, allergen, rating, category, item_price, prep_time, 
 -- Lunch Category
 ('Veg Thali', 'Dairy', 4.7, 'Lunch', 349.00, 25, '/static/images/veg-thali.jpeg'),
 ('Biryani', 'Cashew, Spices', 4.8, 'Lunch', 279.00, 25, '/static/images/biryani.jpeg'),
+('Noodles', 'Agino Moto', 4.9, 'Lunch', 350.00, 10, '/static/images/noodles.jpeg');
 
 -- Drinks Category
 ('Fresh Lime Soda', NULL, 4.2, 'Drinks', 49.00, 2, '/static/images/soda.jpeg'),
 ('Filter Coffee', 'Dairy', 4.5, 'Drinks', 39.00, 3, '/static/images/coffee.jpeg');
+
+ALTER TABLE orders ADD COLUMN bill_status ENUM('pending', 'requested', 'paid') DEFAULT 'pending';
